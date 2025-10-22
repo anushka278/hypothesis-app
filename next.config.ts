@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Environment variables are automatically available from .env file
 };
 
 export default nextConfig;
