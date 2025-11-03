@@ -14,10 +14,10 @@ export default function KnowledgeCard({ knowledgeCard }: KnowledgeCardProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="bg-gradient-to-br from-teal/10 to-sage-green/10 rounded-xl p-5 border-2 border-teal/30 shadow-sm my-4"
+      className="bg-gradient-to-br from-[var(--accent)]/10 to-sage-green/10 rounded-xl p-5 border-2 border-[var(--accent)]/30 shadow-sm my-4"
     >
       <div className="flex items-center gap-2 mb-4">
-        <div className="p-2 bg-teal rounded-lg">
+        <div className="p-2 bg-[var(--accent)] rounded-lg">
           <BookOpen className="w-5 h-5 text-white" />
         </div>
         <h3 className="font-semibold text-foreground text-lg">

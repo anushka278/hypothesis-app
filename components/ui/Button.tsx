@@ -22,9 +22,9 @@ export default function Button({
   const baseStyles = 'font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-offset-2';
   
   const variantStyles = {
-    primary: 'bg-teal text-white hover:opacity-90 focus:ring-teal',
+    primary: 'bg-[var(--accent)] text-white hover:opacity-90 focus:ring-[var(--accent)]',
     secondary: 'bg-coral text-white hover:opacity-90 focus:ring-coral',
-    outline: 'bg-transparent border-2 border-teal text-teal hover:bg-teal hover:text-white focus:ring-teal',
+    outline: 'bg-transparent border-2 border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white focus:ring-[var(--accent)]',
   };
   
   const sizeStyles = {

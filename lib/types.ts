@@ -6,6 +6,7 @@ export interface Variable {
   hypothesisId: string;
   isControl?: boolean; // Control variables vs primary variables
   promptTime?: 'morning' | 'midday' | 'evening' | 'anytime';
+  dataSourceId?: string; // ID of connected app/device that auto-updates this variable
 }
 
 export interface ParsedHypothesis {
@@ -67,4 +68,77 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
 }
+
+export type ProfileCategory = 'age' | 'gender' | 'height' | 'weight' | 'diet' | 'race' | 'allergies' | 'medications' | 'medicalConditions';
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  profilePicture?: string; // URL or base64
+  height?: number; // in cm
+  weight?: number; // in kg
+  age?: number;
+  gender?: string;
+  diet?: string;
+  race?: string;
+  allergies?: string;
+  medications?: string;
+  medicalConditions?: string;
+  enabledCategories: ProfileCategory[]; // Categories enabled on profile
+  visibilitySettings: {
+    name?: boolean;
+    age?: boolean;
+    height?: boolean;
+    weight?: boolean;
+    gender?: boolean;
+    diet?: boolean;
+    race?: boolean;
+    allergies?: boolean;
+    medications?: boolean;
+    medicalConditions?: boolean;
+  }; // Which categories to show on profile (even if enabled)
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AppSettings {
+  notifications: {
+    enabled: boolean;
+    reminderTime?: string; // HH:mm format
+    reminderDays?: number[]; // Array of day indices (0-6, Sunday-Saturday)
+  };
+  colorScheme: 'light' | 'dark';
+  accentColor: 'teal' | 'red' | 'brown' | 'baby-blue' | 'black' | 'orange';
+  units: 'metric' | 'imperial';
+  dataPrivacy: {
+    shareAnalytics: boolean;
+    allowDataExport: boolean;
+    autoBackup: boolean;
+  };
+  updatedAt: string;
+}
+
+export interface ConnectedApp {
+  id: string;
+  name: string;
+  type: 'app';
+  appType: 'fitness' | 'health' | 'nutrition' | 'wellness';
+  icon?: string; // URL or emoji
+  connectedAt: string;
+  lastSync?: string;
+  status: 'connected' | 'disconnected' | 'error';
+}
+
+export interface ConnectedDevice {
+  id: string;
+  name: string;
+  type: 'device';
+  deviceType: 'watch' | 'fitness_tracker' | 'scale' | 'heart_rate_monitor' | 'other';
+  icon?: string; // URL or emoji
+  connectedAt: string;
+  lastSync?: string;
+  status: 'connected' | 'disconnected' | 'error';
+}
+
+export type DataSource = ConnectedApp | ConnectedDevice;
 

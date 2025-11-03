@@ -5,6 +5,7 @@ import { Hypothesis } from '@/lib/types';
 import { getHypotheses, archiveHypothesis } from '@/lib/storage';
 import Card from '@/components/ui/Card';
 import { BookOpen, Archive, CheckCircle } from 'lucide-react';
+import AppHeader from '@/components/ui/AppHeader';
 
 export default function LibraryPage() {
   const [hypotheses, setHypotheses] = useState<Hypothesis[]>([]);
@@ -25,10 +26,7 @@ export default function LibraryPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <h1 className="text-xl font-bold text-foreground">Library</h1>
-        <p className="text-sm text-gray-500">Your hypothesis collection</p>
-      </div>
+      <AppHeader />
 
       <div className="px-4 py-6">
         <div className="max-w-2xl mx-auto">
@@ -38,7 +36,7 @@ export default function LibraryPage() {
               onClick={() => setShowArchived(false)}
               className={`flex-1 py-2 rounded-lg font-medium transition-colors ${
                 !showArchived
-                  ? 'bg-teal text-white'
+                  ? 'bg-[var(--accent)] text-white'
                   : 'bg-white text-gray-600 border border-gray-200'
               }`}
             >
@@ -48,7 +46,7 @@ export default function LibraryPage() {
               onClick={() => setShowArchived(true)}
               className={`flex-1 py-2 rounded-lg font-medium transition-colors ${
                 showArchived
-                  ? 'bg-teal text-white'
+                  ? 'bg-[var(--accent)] text-white'
                   : 'bg-white text-gray-600 border border-gray-200'
               }`}
             >
@@ -83,11 +81,11 @@ export default function LibraryPage() {
                       
                       {/* Parsed Information */}
                       {hypothesis.parsed && (
-                        <div className="mb-3 p-2 bg-teal/5 rounded-lg border border-teal/20">
+                        <div className="mb-3 p-2 bg-[var(--accent)]/5 rounded-lg border border-[var(--accent)]/20">
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <span className="text-gray-500">Intervention:</span>
-                              <span className="ml-1 font-medium text-teal">
+                              <span className="ml-1 font-medium text-[var(--accent)]">
                                 {hypothesis.parsed.intervention}
                               </span>
                             </div>

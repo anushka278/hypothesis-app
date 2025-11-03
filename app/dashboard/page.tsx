@@ -6,6 +6,7 @@ import { getActiveVariables, getActiveHypotheses } from '@/lib/storage';
 import VariableCard from '@/components/dashboard/VariableCard';
 import { PlusCircle, Calendar, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import AppHeader from '@/components/ui/AppHeader';
 
 export default function DashboardPage() {
   const [variables, setVariables] = useState<Variable[]>([]);
@@ -32,10 +33,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <h1 className="text-xl font-bold text-foreground">Track Variables</h1>
-        <p className="text-sm text-gray-500">Log your daily data</p>
-      </div>
+      <AppHeader />
 
       <div className="px-4 py-6">
         {/* Baseline Phase Banner */}
@@ -74,7 +72,7 @@ export default function DashboardPage() {
               </p>
               <Link
                 href="/chat"
-                className="inline-block bg-teal text-white px-6 py-2 rounded-lg hover:opacity-90 transition-opacity"
+                className="inline-block bg-[var(--accent)] text-white px-6 py-2 rounded-lg hover:opacity-90 transition-opacity"
               >
                 Create Hypothesis
               </Link>

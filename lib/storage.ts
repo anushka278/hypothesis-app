@@ -1,9 +1,12 @@
-import { Hypothesis, DataPoint, Variable } from './types';
+import { Hypothesis, DataPoint, Variable, UserProfile, AppSettings, DataSource, ConnectedApp, ConnectedDevice } from './types';
 
 const STORAGE_KEYS = {
   HYPOTHESES: 'hypotheses',
   DATA_POINTS: 'dataPoints',
   VARIABLES: 'variables',
+  USER_PROFILE: 'userProfile',
+  APP_SETTINGS: 'appSettings',
+  DATA_SOURCES: 'dataSources',
 };
 
 // Hypotheses
@@ -132,6 +135,127 @@ export function getStreak(variableId: string): number {
   }
   
   return streak;
+}
+
+// User Profile
+export function getUserProfile(): UserProfile | null {
+  if (typeof window === 'undefined') return null;
+  const data = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+  return data ? JSON.parse(data) : null;
+}
+
+export function saveUserProfile(profile: UserProfile): void {
+  profile.updatedAt = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+}
+
+export function updateUserProfile(updates: Partial<UserProfile>): UserProfile {
+  const existing = getUserProfile();
+  const profileId = existing?.id || `profile-${Date.now()}`;
+  const createdAt = existing?.createdAt || new Date().toISOString();
+  
+  const profile: UserProfile = {
+    ...existing,
+    ...updates,
+    id: profileId,
+    createdAt,
+    updatedAt: new Date().toISOString(),
+  } as UserProfile;
+  
+  saveUserProfile(profile);
+  return profile;
+}
+
+// App Settings
+export function getAppSettings(): AppSettings {
+  if (typeof window === 'undefined') {
+    return getDefaultSettings();
+  }
+  const data = localStorage.getItem(STORAGE_KEYS.APP_SETTINGS);
+  if (data) {
+    const settings = JSON.parse(data);
+    // Migrate old color values
+    if (settings.accentColor === 'purple') {
+      settings.accentColor = 'brown';
+    }
+    if (settings.accentColor === 'yellow') {
+      settings.accentColor = 'orange';
+    }
+    // Merge with defaults to handle new settings that might have been added
+    return { ...getDefaultSettings(), ...settings };
+  }
+  return getDefaultSettings();
+}
+
+function getDefaultSettings(): AppSettings {
+  return {
+    notifications: {
+      enabled: true,
+      reminderTime: '20:00',
+      reminderDays: [1, 2, 3, 4, 5], // Weekdays
+    },
+    colorScheme: 'light',
+    accentColor: 'teal',
+    units: 'metric',
+    dataPrivacy: {
+      shareAnalytics: false,
+      allowDataExport: true,
+      autoBackup: false,
+    },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function saveAppSettings(settings: AppSettings): void {
+  settings.updatedAt = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEYS.APP_SETTINGS, JSON.stringify(settings));
+}
+
+export function updateAppSettings(updates: Partial<AppSettings>): AppSettings {
+  const existing = getAppSettings();
+  const settings: AppSettings = {
+    ...existing,
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+  
+  saveAppSettings(settings);
+  return settings;
+}
+
+// Data Sources (Apps & Devices)
+export function getDataSources(): DataSource[] {
+  if (typeof window === 'undefined') return [];
+  const data = localStorage.getItem(STORAGE_KEYS.DATA_SOURCES);
+  return data ? JSON.parse(data) : [];
+}
+
+export function saveDataSource(dataSource: DataSource): void {
+  const sources = getDataSources();
+  const existingIndex = sources.findIndex(s => s.id === dataSource.id);
+  
+  if (existingIndex >= 0) {
+    sources[existingIndex] = dataSource;
+  } else {
+    sources.push(dataSource);
+  }
+  
+  localStorage.setItem(STORAGE_KEYS.DATA_SOURCES, JSON.stringify(sources));
+}
+
+export function deleteDataSource(id: string): void {
+  const sources = getDataSources();
+  const filtered = sources.filter(s => s.id !== id);
+  localStorage.setItem(STORAGE_KEYS.DATA_SOURCES, JSON.stringify(filtered));
+  
+  // Also remove dataSourceId from any variables using it
+  const variables = getVariables();
+  variables.forEach(v => {
+    if (v.dataSourceId === id) {
+      delete v.dataSourceId;
+      saveVariable(v);
+    }
+  });
 }
 
 // Clear all data

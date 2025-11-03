@@ -9,7 +9,7 @@ import ChatBubble from '@/components/chat/ChatBubble';
 import ChatInput from '@/components/chat/ChatInput';
 import KnowledgeCard from '@/components/chat/KnowledgeCard';
 import { useRouter } from 'next/navigation';
-import { Sparkles } from 'lucide-react';
+import AppHeader from '@/components/ui/AppHeader';
 
 type ConversationStep = 
   | 'welcome' 
@@ -75,7 +75,7 @@ export default function ChatPage() {
     const welcomeMsg: ChatMessage = {
       id: 'welcome',
       role: 'assistant',
-      content: "👋 Hi! I'm here to help you design a personal hypothesis experiment. Tell me what you'd like to test.",
+      content: "What's on your mind? Let's design a personal experiment and put your hypothesis to the test.",
       timestamp: new Date().toISOString(),
     };
     setMessages([welcomeMsg]);
@@ -402,15 +402,7 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex flex-col">
-      <div className="bg-gradient-to-r from-teal to-sage-green border-b border-gray-200 px-4 py-4">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-6 h-6 text-white" />
-          <div>
-            <h1 className="text-xl font-bold text-white">Hypothesis Designer</h1>
-            <p className="text-sm text-white/90">AI-powered experiment setup</p>
-          </div>
-        </div>
-      </div>
+      <AppHeader />
 
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-2xl mx-auto">
@@ -426,9 +418,9 @@ export default function ChatPage() {
                       key={idx}
                       onClick={() => handleUserMessage(example)}
                       disabled={isProcessing}
-                      className="w-full text-left px-4 py-3 bg-white border-2 border-teal/30 rounded-xl hover:border-teal hover:bg-teal/5 transition-all text-sm text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full text-left px-4 py-3 bg-white border-2 border-[var(--accent)]/30 rounded-xl hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all text-sm text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <span className="text-teal font-medium">💡</span> {example}
+                      <span className="text-[var(--accent)] font-medium">💡</span> {example}
                     </button>
                   ))}
                 </div>

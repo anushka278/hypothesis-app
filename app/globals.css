@@ -4,16 +4,94 @@
   --background: #F9F8F4;
   --foreground: #333333;
   --teal: #6CC5A1;
+  --red: #EF4444;
+  --brown: #92400E;
+  --baby-blue: #60A5FA;
+  --black: #000000;
+  --orange: #FB923C;
   --coral: #F57C6E;
   --pastel-blue: #A8D5E2;
   --lavender: #C5B9E0;
   --sage-green: #B8D4C8;
+  
+  /* Default accent color */
+  --accent: var(--teal);
+}
+
+.dark {
+  /* Inverse mode: white/off-white backgrounds become dark, black text becomes white */
+  --background: #1a1a1a;
+  --foreground: #ffffff;
+}
+
+/* Dark mode inversion - override Tailwind defaults */
+.dark .bg-white {
+  background-color: #2d2d2d !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-gray-100 {
+  background-color: #1a1a1a !important;
+}
+
+.dark .text-black {
+  color: #ffffff !important;
+}
+
+/* Convert all grey text to white in dark mode */
+.dark .text-gray-50,
+.dark .text-gray-100,
+.dark .text-gray-200,
+.dark .text-gray-300,
+.dark .text-gray-400,
+.dark .text-gray-500,
+.dark .text-gray-600,
+.dark .text-gray-700,
+.dark .text-gray-800,
+.dark .text-gray-900 {
+  color: #ffffff !important;
+}
+
+.dark .border-gray-200,
+.dark .border-gray-300 {
+  border-color: #404040 !important;
+}
+
+/* Accent color classes */
+[data-accent="teal"] {
+  --accent: var(--teal);
+}
+
+[data-accent="red"] {
+  --accent: var(--red);
+}
+
+[data-accent="brown"] {
+  --accent: var(--brown);
+}
+
+[data-accent="baby-blue"] {
+  --accent: var(--baby-blue);
+}
+
+[data-accent="black"] {
+  --accent: var(--black);
+}
+
+[data-accent="orange"] {
+  --accent: var(--orange);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-teal: var(--teal);
+  --color-red: var(--red);
+  --color-brown: var(--brown);
+  --color-baby-blue: var(--baby-blue);
+  --color-black: var(--black);
+  --color-orange: var(--orange);
+  --color-accent: var(--accent);
   --color-coral: var(--coral);
   --color-pastel-blue: var(--pastel-blue);
   --color-lavender: var(--lavender);
@@ -26,4 +104,5 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }

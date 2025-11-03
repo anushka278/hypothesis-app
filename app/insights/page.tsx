@@ -8,6 +8,7 @@ import VariableChart from '@/components/insights/VariableChart';
 import InsightCard from '@/components/insights/InsightCard';
 import Card from '@/components/ui/Card';
 import { TrendingUp, Calendar, Activity } from 'lucide-react';
+import AppHeader from '@/components/ui/AppHeader';
 
 export default function InsightsPage() {
   const [variables, setVariables] = useState<Variable[]>([]);
@@ -30,10 +31,7 @@ export default function InsightsPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <h1 className="text-xl font-bold text-foreground">Insights</h1>
-        <p className="text-sm text-gray-500">Discover patterns in your data</p>
-      </div>
+      <AppHeader />
 
       <div className="px-4 py-6">
         {variables.length === 0 ? (
@@ -53,7 +51,7 @@ export default function InsightsPage() {
             {/* Summary Stats */}
             <div className="grid grid-cols-3 gap-4">
               <Card className="text-center">
-                <Activity className="w-6 h-6 text-teal mx-auto mb-2" />
+                <Activity className="w-6 h-6 text-[var(--accent)] mx-auto mb-2" />
                 <p className="text-2xl font-bold text-foreground">{variables.length}</p>
                 <p className="text-xs text-gray-500">Active Variables</p>
               </Card>

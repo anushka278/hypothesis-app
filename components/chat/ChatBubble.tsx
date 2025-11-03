@@ -22,7 +22,7 @@ export default function ChatBubble({ message, delay = 0 }: ChatBubbleProps) {
         className={`max-w-[80%] rounded-2xl px-4 py-3 ${
           isAssistant
             ? 'bg-white text-foreground shadow-sm'
-            : 'bg-teal text-white'
+            : 'bg-[var(--accent)] text-white'
         }`}
       >
         <p className="text-sm leading-relaxed">{message.content}</p>
