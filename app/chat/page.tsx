@@ -197,11 +197,19 @@ function ChatPageContent() {
       
       if (wantsCard && state.parsed) {
         // Generate and show knowledge card
+        setShowKnowledgeCardPrompt(false);
+        addMessage(content, 'user');
+        // Show loading message while generating knowledge card
+        const loadingMsgId = addMessage("We're pulling that up...", 'assistant');
+        
         try {
           const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
           const knowledgeCard = useAI
             ? await generateKnowledgeCardWithAI(state.parsed.intervention, state.parsed.outcome, state.parsed.category)
             : generateKnowledgeCard(state.parsed.intervention, state.parsed.outcome, state.parsed.category);
+          
+          // Remove loading message
+          setMessages(prev => prev.filter(msg => msg.id !== loadingMsgId));
           
           setState(prev => ({
             ...prev,
@@ -210,16 +218,75 @@ function ChatPageContent() {
           }));
           
           setHasShownKnowledgeCard(true);
-          setShowKnowledgeCardPrompt(false);
-          addMessage(content, 'user');
           // Add the "Great!" message and set the knowledge card to appear after it
           const greatMsgId = addMessage("Great! Here's what the research says about this:", 'assistant');
           setKnowledgeCardAfterMessageId(greatMsgId);
           
-          // After showing knowledge card, proceed with chat to build hypothesis
-          setTimeout(() => {
-            addMessage("Now let me help you put together a complete hypothesis testing recommendation. I'll ask a few questions to customize it perfectly.", 'assistant');
-            setShouldFocusInput(true);
+          // After showing knowledge card, immediately start asking questions
+          setTimeout(async () => {
+            // Trigger the AI to ask the first question by simulating a user message
+            // that continues the conversation
+            setIsProcessing(true);
+            try {
+              const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
+              if (useAI) {
+                const openAIMessages = messages
+                  .filter(msg => msg.id !== 'welcome' && msg.id !== loadingMsgId)
+                  .map(msg => ({
+                    role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+                    content: msg.content
+                  }));
+                
+                const result = await chatWithAI(openAIMessages, true);
+                const options = parseOptionsFromResponse(result.response);
+                const responseText = options.length > 0 
+                  ? removeOptionsFromResponse(result.response)
+                  : result.response;
+                
+                const assistantMsgId = addMessage(responseText, 'assistant');
+                
+                if (options.length === 0) {
+                  setTimeout(() => setShouldFocusInput(true), 100);
+                }
+                
+                if (options.length > 0) {
+                  setMessageOptions(prev => {
+                    const newMap = new Map(prev);
+                    newMap.set(assistantMsgId, options);
+                    return newMap;
+                  });
+                }
+                
+                // Update state if extracted info
+                if (result.extractedInfo) {
+                  const extracted = result.extractedInfo;
+                  if (extracted.intervention || extracted.outcome) {
+                    const newParsed: ParsedHypothesis = {
+                      intervention: extracted.intervention || state.parsed?.intervention || 'intervention',
+                      outcome: extracted.outcome || state.parsed?.outcome || 'outcome',
+                      category: (extracted.category as ParsedHypothesis['category']) || state.parsed?.category || 'general',
+                      confidence: state.parsed?.confidence || 0.9
+                    };
+                    
+                    setState(prev => ({
+                      ...prev,
+                      parsed: newParsed,
+                      frequency: extracted.frequency || prev.frequency,
+                      timing: extracted.timing || prev.timing,
+                      outcomeContext: extracted.outcomeContext || prev.outcomeContext,
+                      wantsBaseline: extracted.wantsBaseline !== undefined ? extracted.wantsBaseline : true,
+                      baselineDays: extracted.baselineDays || prev.baselineDays,
+                      selectedControls: extracted.selectedControls || prev.selectedControls,
+                    }));
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Error starting conversation:', error);
+            } finally {
+              setIsProcessing(false);
+              setTimeout(() => setShouldFocusInput(true), 150);
+            }
           }, 1500);
           
           setIsProcessing(false);
@@ -228,11 +295,74 @@ function ChatPageContent() {
           console.error('Error generating knowledge card:', error);
         }
       } else {
-        // User said no to knowledge card, proceed with chat to build hypothesis
+        // User said no to knowledge card, immediately start asking questions
         addMessage(content, 'user');
-        addMessage("No problem! Let's continue with setting up your experiment. I'll ask a few questions to customize it perfectly.", 'assistant');
         setShowKnowledgeCardPrompt(false);
-        setShouldFocusInput(true);
+        
+        setTimeout(async () => {
+          setIsProcessing(true);
+          try {
+            const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
+            if (useAI) {
+              const openAIMessages = messages
+                .filter(msg => msg.id !== 'welcome')
+                .map(msg => ({
+                  role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+                  content: msg.content
+                }));
+              
+              const result = await chatWithAI(openAIMessages, true);
+              const options = parseOptionsFromResponse(result.response);
+              const responseText = options.length > 0 
+                ? removeOptionsFromResponse(result.response)
+                : result.response;
+              
+              const assistantMsgId = addMessage(responseText, 'assistant');
+              
+              if (options.length === 0) {
+                setTimeout(() => setShouldFocusInput(true), 100);
+              }
+              
+              if (options.length > 0) {
+                setMessageOptions(prev => {
+                  const newMap = new Map(prev);
+                  newMap.set(assistantMsgId, options);
+                  return newMap;
+                });
+              }
+              
+              // Update state if extracted info
+              if (result.extractedInfo) {
+                const extracted = result.extractedInfo;
+                if (extracted.intervention || extracted.outcome) {
+                  const newParsed: ParsedHypothesis = {
+                    intervention: extracted.intervention || state.parsed?.intervention || 'intervention',
+                    outcome: extracted.outcome || state.parsed?.outcome || 'outcome',
+                    category: (extracted.category as ParsedHypothesis['category']) || state.parsed?.category || 'general',
+                    confidence: state.parsed?.confidence || 0.9
+                  };
+                  
+                  setState(prev => ({
+                    ...prev,
+                    parsed: newParsed,
+                    frequency: extracted.frequency || prev.frequency,
+                    timing: extracted.timing || prev.timing,
+                    outcomeContext: extracted.outcomeContext || prev.outcomeContext,
+                    wantsBaseline: extracted.wantsBaseline !== undefined ? extracted.wantsBaseline : true,
+                    baselineDays: extracted.baselineDays || prev.baselineDays,
+                    selectedControls: extracted.selectedControls || prev.selectedControls,
+                  }));
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error starting conversation:', error);
+          } finally {
+            setIsProcessing(false);
+            setTimeout(() => setShouldFocusInput(true), 150);
+          }
+        }, 500);
+        
         setIsProcessing(false);
         return;
       }
@@ -553,12 +683,25 @@ function ChatPageContent() {
     const result: string[] = [];
     let inOptionsSection = false;
     let foundOptionsHeader = false;
+    let foundQuestionHeader = false;
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trim();
       const isOptionsHeader = /^Options?:/i.test(trimmed);
+      const isQuestionHeader = /^Question:?/i.test(trimmed);
       const isBullet = /^[-•]\s*/.test(trimmed);
+      
+      // Check if this is the "Question:" header (which might appear before options)
+      if (isQuestionHeader) {
+        foundQuestionHeader = true;
+        // Don't include the "Question:" line itself, just the question text
+        const questionText = trimmed.replace(/^Question:?\s*/i, '').trim();
+        if (questionText) {
+          result.push(questionText);
+        }
+        continue;
+      }
       
       // Check if this is the "Options:" header
       if (isOptionsHeader) {
@@ -575,6 +718,9 @@ function ChatPageContent() {
       // If we're in options section and hit a non-bullet, non-empty line, stop skipping
       if (inOptionsSection && trimmed && !isBullet) {
         inOptionsSection = false;
+        // Add this line if it's not part of options
+        result.push(line);
+        continue;
       }
       
       // If we're in options section and hit an empty line after bullets, stop skipping
@@ -912,11 +1058,17 @@ function ChatPageContent() {
                       
                       if (wantsCard && state.parsed) {
                         // Generate and show knowledge card
+                        // Show loading message while generating
+                        const loadingMsgId = addMessage("We're pulling that up...", 'assistant');
+                        
                         try {
                           const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
                           const knowledgeCard = useAI
                             ? await generateKnowledgeCardWithAI(state.parsed!.intervention, state.parsed!.outcome, state.parsed!.category)
                             : generateKnowledgeCard(state.parsed!.intervention, state.parsed!.outcome, state.parsed!.category);
+                          
+                          // Remove loading message
+                          setMessages(prev => prev.filter(msg => msg.id !== loadingMsgId));
                           
                           setState(prev => ({
                             ...prev,
@@ -928,20 +1080,143 @@ function ChatPageContent() {
                           // Add the "Great!" message and set the knowledge card to appear after it
                           const greatMsgId = addMessage("Great! Here's what the research says about this:", 'assistant');
                           setKnowledgeCardAfterMessageId(greatMsgId);
+                          
+                          // After showing knowledge card, immediately start asking questions
+                          setTimeout(async () => {
+                            setIsProcessing(true);
+                            try {
+                              const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
+                              if (useAI) {
+                                const openAIMessages = messages
+                                  .filter(msg => msg.id !== 'welcome' && msg.id !== loadingMsgId)
+                                  .map(msg => ({
+                                    role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+                                    content: msg.content
+                                  }));
+                                
+                                const result = await chatWithAI(openAIMessages, true);
+                                const options = parseOptionsFromResponse(result.response);
+                                const responseText = options.length > 0 
+                                  ? removeOptionsFromResponse(result.response)
+                                  : result.response;
+                                
+                                const assistantMsgId = addMessage(responseText, 'assistant');
+                                
+                                if (options.length === 0) {
+                                  setTimeout(() => setShouldFocusInput(true), 100);
+                                }
+                                
+                                if (options.length > 0) {
+                                  setMessageOptions(prev => {
+                                    const newMap = new Map(prev);
+                                    newMap.set(assistantMsgId, options);
+                                    return newMap;
+                                  });
+                                }
+                                
+                                // Update state if extracted info
+                                if (result.extractedInfo) {
+                                  const extracted = result.extractedInfo;
+                                  if (extracted.intervention || extracted.outcome) {
+                                    const newParsed: ParsedHypothesis = {
+                                      intervention: extracted.intervention || state.parsed?.intervention || 'intervention',
+                                      outcome: extracted.outcome || state.parsed?.outcome || 'outcome',
+                                      category: (extracted.category as ParsedHypothesis['category']) || state.parsed?.category || 'general',
+                                      confidence: state.parsed?.confidence || 0.9
+                                    };
+                                    
+                                    setState(prev => ({
+                                      ...prev,
+                                      parsed: newParsed,
+                                      frequency: extracted.frequency || prev.frequency,
+                                      timing: extracted.timing || prev.timing,
+                                      outcomeContext: extracted.outcomeContext || prev.outcomeContext,
+                                      wantsBaseline: extracted.wantsBaseline !== undefined ? extracted.wantsBaseline : true,
+                                      baselineDays: extracted.baselineDays || prev.baselineDays,
+                                      selectedControls: extracted.selectedControls || prev.selectedControls,
+                                    }));
+                                  }
+                                }
+                              }
+                            } catch (error) {
+                              console.error('Error starting conversation:', error);
+                            } finally {
+                              setIsProcessing(false);
+                              setTimeout(() => setShouldFocusInput(true), 150);
+                            }
+                          }, 1500);
                         } catch (error) {
+                          // Remove loading message on error
+                          setMessages(prev => prev.filter(msg => msg.id !== loadingMsgId));
                           console.error('Error generating knowledge card:', error);
                           addMessage("I encountered an error generating the knowledge card. Let's continue with your experiment setup.", 'assistant');
                         }
                       } else {
-                        addMessage("No problem! Let's continue with setting up your experiment.", 'assistant');
+                        // User said no to knowledge card, immediately start asking questions
+                        setTimeout(async () => {
+                          setIsProcessing(true);
+                          try {
+                            const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
+                            if (useAI) {
+                              const openAIMessages = messages
+                                .filter(msg => msg.id !== 'welcome')
+                                .map(msg => ({
+                                  role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+                                  content: msg.content
+                                }));
+                              
+                              const result = await chatWithAI(openAIMessages, true);
+                              const options = parseOptionsFromResponse(result.response);
+                              const responseText = options.length > 0 
+                                ? removeOptionsFromResponse(result.response)
+                                : result.response;
+                              
+                              const assistantMsgId = addMessage(responseText, 'assistant');
+                              
+                              if (options.length === 0) {
+                                setTimeout(() => setShouldFocusInput(true), 100);
+                              }
+                              
+                              if (options.length > 0) {
+                                setMessageOptions(prev => {
+                                  const newMap = new Map(prev);
+                                  newMap.set(assistantMsgId, options);
+                                  return newMap;
+                                });
+                              }
+                              
+                              // Update state if extracted info
+                              if (result.extractedInfo) {
+                                const extracted = result.extractedInfo;
+                                if (extracted.intervention || extracted.outcome) {
+                                  const newParsed: ParsedHypothesis = {
+                                    intervention: extracted.intervention || state.parsed?.intervention || 'intervention',
+                                    outcome: extracted.outcome || state.parsed?.outcome || 'outcome',
+                                    category: (extracted.category as ParsedHypothesis['category']) || state.parsed?.category || 'general',
+                                    confidence: state.parsed?.confidence || 0.9
+                                  };
+                                  
+                                  setState(prev => ({
+                                    ...prev,
+                                    parsed: newParsed,
+                                    frequency: extracted.frequency || prev.frequency,
+                                    timing: extracted.timing || prev.timing,
+                                    outcomeContext: extracted.outcomeContext || prev.outcomeContext,
+                                    wantsBaseline: extracted.wantsBaseline !== undefined ? extracted.wantsBaseline : true,
+                                    baselineDays: extracted.baselineDays || prev.baselineDays,
+                                    selectedControls: extracted.selectedControls || prev.selectedControls,
+                                  }));
+                                }
+                              }
+                            }
+                          } catch (error) {
+                            console.error('Error starting conversation:', error);
+                          } finally {
+                            setIsProcessing(false);
+                            setTimeout(() => setShouldFocusInput(true), 150);
+                          }
+                        }, 500);
                       }
-                      
-                      // After knowledge card decision, proceed with normal chat to build hypothesis
-                      setTimeout(() => {
-                        // Continue the conversation to build the hypothesis
-                        addMessage("Now let me help you put together a complete hypothesis testing recommendation. I'll ask a few questions to customize it perfectly.", 'assistant');
-                        setShouldFocusInput(true);
-                      }, wantsCard ? 1500 : 500);
                     }}
                     disabled={isProcessing}
                   />

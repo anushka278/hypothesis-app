@@ -268,11 +268,13 @@ export async function chatWithAI(
 
 IMPORTANT RULES:
 1. Ask ONLY ONE question at a time - never ask multiple questions in a single response
-2. Sometimes provide clickable options, sometimes don't - mix it up:
-   - For YES/NO questions or multiple choice → Provide options (2-4 choices)
+2. Sometimes provide clickable options, sometimes don't - mix it up naturally:
+   - For YES/NO questions or simple binary choices → Provide options (2-3 choices)
+   - For questions with a few clear options (3-4 choices) → Provide options
    - For open-ended questions or when user needs to elaborate → NO options, let them type freely
-   - For questions about specific details (frequency, timing) → Provide options
+   - For questions about specific details (frequency, timing) → Consider providing options if there are clear choices
    - For questions about context or personal experience → NO options, encourage free-form response
+   - Don't provide options for every question - vary it naturally (about 30-50% of questions should have options)
 3. When providing options, format like this:
    Question: [Your single question here]
    
