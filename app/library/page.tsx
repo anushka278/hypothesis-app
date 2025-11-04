@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react';
 import { Hypothesis } from '@/lib/types';
 import { getHypotheses, archiveHypothesis } from '@/lib/storage';
 import Card from '@/components/ui/Card';
-import { BookOpen, Archive, CheckCircle } from 'lucide-react';
+import { BookOpen, Archive, CheckCircle, MessageSquare } from 'lucide-react';
 import AppHeader from '@/components/ui/AppHeader';
+import { useRouter } from 'next/navigation';
 
 export default function LibraryPage() {
   const [hypotheses, setHypotheses] = useState<Hypothesis[]>([]);
   const [showArchived, setShowArchived] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setHypotheses(getHypotheses());
@@ -18,6 +20,12 @@ export default function LibraryPage() {
   const handleArchive = (id: string) => {
     archiveHypothesis(id);
     setHypotheses(getHypotheses());
+  };
+
+  const handleOpenConversation = (hypothesis: Hypothesis) => {
+    if (hypothesis.conversationId) {
+      router.push(`/chat?conversationId=${hypothesis.conversationId}`);
+    }
   };
 
   const activeHypotheses = hypotheses.filter(h => !h.archived);
@@ -142,15 +150,26 @@ export default function LibraryPage() {
                         Created {new Date(hypothesis.createdAt).toLocaleDateString()}
                       </p>
                     </div>
-                    {!hypothesis.archived && (
-                      <button
-                        onClick={() => handleArchive(hypothesis.id)}
-                        className="ml-4 p-2 text-gray-400 hover:text-coral transition-colors"
-                        title="Archive hypothesis"
-                      >
-                        <Archive className="w-5 h-5" />
-                      </button>
-                    )}
+                    <div className="ml-4 flex items-center gap-2">
+                      {hypothesis.conversationId && (
+                        <button
+                          onClick={() => handleOpenConversation(hypothesis)}
+                          className="p-2 text-gray-400 hover:text-[var(--accent)] transition-colors"
+                          title="Open conversation"
+                        >
+                          <MessageSquare className="w-5 h-5" />
+                        </button>
+                      )}
+                      {!hypothesis.archived && (
+                        <button
+                          onClick={() => handleArchive(hypothesis.id)}
+                          className="p-2 text-gray-400 hover:text-coral transition-colors"
+                          title="Archive hypothesis"
+                        >
+                          <Archive className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {hypothesis.archived && (
                     <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 text-gray-500">

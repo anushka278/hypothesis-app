@@ -1,4 +1,4 @@
-import { Hypothesis, DataPoint, Variable, UserProfile, AppSettings, DataSource, ConnectedApp, ConnectedDevice } from './types';
+import { Hypothesis, DataPoint, Variable, UserProfile, AppSettings, DataSource, ConnectedApp, ConnectedDevice, Conversation } from './types';
 
 const STORAGE_KEYS = {
   HYPOTHESES: 'hypotheses',
@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   USER_PROFILE: 'userProfile',
   APP_SETTINGS: 'appSettings',
   DATA_SOURCES: 'dataSources',
+  CONVERSATIONS: 'conversations',
 };
 
 // Hypotheses
@@ -256,6 +257,36 @@ export function deleteDataSource(id: string): void {
       saveVariable(v);
     }
   });
+}
+
+// Conversations
+export function saveConversation(conversation: Conversation): void {
+  const conversations = getConversations();
+  const existingIndex = conversations.findIndex(c => c.id === conversation.id);
+  
+  if (existingIndex >= 0) {
+    conversations[existingIndex] = conversation;
+  } else {
+    conversations.push(conversation);
+  }
+  
+  // Sort by updatedAt (most recent first) and keep only 5 most recent
+  conversations.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  const recentConversations = conversations.slice(0, 5);
+  
+  localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(recentConversations));
+}
+
+export function getConversations(): Conversation[] {
+  if (typeof window === 'undefined') return [];
+  const data = localStorage.getItem(STORAGE_KEYS.CONVERSATIONS);
+  return data ? JSON.parse(data) : [];
+}
+
+export function deleteConversation(id: string): void {
+  const conversations = getConversations();
+  const filtered = conversations.filter(c => c.id !== id);
+  localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(filtered));
 }
 
 // Clear all data

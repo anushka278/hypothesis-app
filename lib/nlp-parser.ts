@@ -245,13 +245,13 @@ export function generateKnowledgeCard(intervention: string, outcome: string, cat
 // Suggest control variables based on outcome category
 export function getDefaultControlVariables(category: ParsedHypothesis['category']): string[] {
   const controlMap: Record<ParsedHypothesis['category'], string[]> = {
-    cognitive: ['sleep quality', 'caffeine intake', 'stress level', 'hydration', 'diet quality'],
-    physical: ['sleep quality', 'nutrition', 'hydration', 'stress', 'recovery time'],
-    emotional: ['sleep quality', 'stress events', 'social interaction', 'exercise', 'screen time'],
-    sleep: ['caffeine intake', 'screen time before bed', 'exercise', 'stress level', 'bedtime consistency'],
-    nutrition: ['sleep quality', 'exercise', 'hydration', 'stress', 'meal timing'],
-    behavioral: ['mood', 'energy level', 'sleep quality', 'stress', 'motivation'],
-    general: ['sleep quality', 'stress level', 'mood', 'energy level'],
+    cognitive: ['sleep', 'caffeine intake', 'stress', 'hydration', 'nutrition'],
+    physical: ['sleep', 'nutrition', 'hydration', 'stress', 'recovery time'],
+    emotional: ['sleep', 'stress', 'social interaction', 'exercise', 'screen time'],
+    sleep: ['caffeine intake', 'screen time before bed', 'exercise', 'stress', 'bedtime consistency'],
+    nutrition: ['sleep', 'exercise', 'hydration', 'stress', 'meal timing'],
+    behavioral: ['mood', 'energy level', 'sleep', 'stress', 'motivation'],
+    general: ['sleep', 'stress', 'mood', 'energy level'],
   };
   
   return controlMap[category] || controlMap.general;

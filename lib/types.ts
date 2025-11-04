@@ -45,6 +45,7 @@ export interface Hypothesis {
     timing?: string;
     specificContext?: string;
   };
+  conversationId?: string; // Link to the conversation that created this hypothesis
 }
 
 export interface DataPoint {
@@ -53,6 +54,23 @@ export interface DataPoint {
   value: number;
   date: string;
   note?: string;
+  metadata?: {
+    // For exercise tracking
+    exerciseType?: string;
+    duration?: number; // in minutes
+    distance?: number; // in miles or km
+    // For hydration tracking
+    amount?: number; // in oz
+    unit?: 'glass' | 'oz' | 'mug' | 'bottle';
+    // For sleep tracking
+    sleepQuality?: number; // 1-10
+    sleepDuration?: number; // in hours
+    // For nutrition tracking
+    mealType?: string;
+    timeOfDay?: string;
+    calories?: number;
+    ingredients?: string;
+  };
 }
 
 export interface Insight {
@@ -67,6 +85,30 @@ export interface ChatMessage {
   role: 'assistant' | 'user';
   content: string;
   timestamp: string;
+}
+
+export interface Conversation {
+  id: string;
+  title: string; // First user message or hypothesis text
+  messages: ChatMessage[];
+  state: {
+    hypothesisText: string;
+    parsed?: ParsedHypothesis;
+    knowledgeCard?: KnowledgeCard;
+    outcomeContext?: string;
+    frequency?: string;
+    timing?: string;
+    wantsBaseline: boolean;
+    baselineDays: number;
+    selectedControls: string[];
+    suggestedControls: string[];
+    currentQuestionIndex: number;
+    clarifyingQuestions: string[];
+    step: string;
+    knowledgeCardAfterMessageId?: string | null;
+  };
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ProfileCategory = 'age' | 'gender' | 'height' | 'weight' | 'diet' | 'race' | 'allergies' | 'medications' | 'medicalConditions';

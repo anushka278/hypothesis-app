@@ -14,8 +14,52 @@ export default function DashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    setVariables(getActiveVariables());
+    const allVariables = getActiveVariables();
     setHypotheses(getActiveHypotheses());
+    
+    // Normalize variable names for deduplication
+    // This function handles special cases like "sleep" vs "sleep quality"
+    const normalizeVariableName = (name: string): string => {
+      const normalized = name.toLowerCase().trim();
+      
+      // Normalize all sleep-related names to just "sleep"
+      // "sleep", "sleep quality", "sleep duration" all become "sleep"
+      if (normalized.startsWith('sleep')) {
+        return 'sleep';
+      }
+      
+      return normalized;
+    };
+    
+    // Deduplicate variables by normalized name (case-insensitive)
+    // Keep the first occurrence of each variable name and track all IDs with that name
+    const variableMap = new Map<string, { variable: Variable; allIds: string[] }>();
+    
+    allVariables.forEach(v => {
+      const nameKey = normalizeVariableName(v.name);
+      
+      if (variableMap.has(nameKey)) {
+        // Add this variable ID to the existing group
+        const existing = variableMap.get(nameKey)!;
+        existing.allIds.push(v.id);
+        
+        // Prefer the shorter name (e.g., "sleep" over "sleep quality") as the representative
+        if (v.name.length < existing.variable.name.length) {
+          existing.variable = v;
+        }
+      } else {
+        // First occurrence - use this as the representative variable
+        variableMap.set(nameKey, { variable: v, allIds: [v.id] });
+      }
+    });
+    
+    // Convert to array with allIds attached
+    const deduplicatedVariables = Array.from(variableMap.values()).map(({ variable, allIds }) => ({
+      ...variable,
+      _allVariableIds: allIds, // Store all IDs for this variable name
+    }));
+    
+    setVariables(deduplicatedVariables as any);
   }, [refreshKey]);
 
   const handleUpdate = () => {
