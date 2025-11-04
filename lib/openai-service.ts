@@ -237,7 +237,162 @@ Return ONLY a valid JSON object with a "questions" array:
       `How would you specifically define "${parsed.outcome}" for your tracking?`,
       `How often will you do ${parsed.intervention}?`,
       `When during the day do you want to measure ${parsed.outcome}?`,
-      'Would you like a baseline period before starting?'
+      // Baseline is always recommended, so we don't ask about it
+      // The system will automatically include a baseline period
     ];
+}
+
+// Conversational AI chat function for natural hypothesis creation
+export async function chatWithAI(
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  extractInfo: boolean = false
+): Promise<{
+  response: string;
+  extractedInfo?: {
+    intervention?: string;
+    outcome?: string;
+    category?: string;
+    frequency?: string;
+    timing?: string;
+    outcomeContext?: string;
+    wantsBaseline?: boolean;
+    baselineDays?: number;
+    selectedControls?: string[];
+    isReadyToCreate?: boolean;
+  };
+}> {
+  try {
+    const client = getOpenAIClient();
+  
+  const systemPrompt = `You are a helpful AI assistant that guides users through designing personal experiments and hypotheses to test how different interventions affect their well-being.
+
+IMPORTANT RULES:
+1. Ask ONLY ONE question at a time - never ask multiple questions in a single response
+2. Sometimes provide clickable options, sometimes don't - mix it up:
+   - For YES/NO questions or multiple choice → Provide options (2-4 choices)
+   - For open-ended questions or when user needs to elaborate → NO options, let them type freely
+   - For questions about specific details (frequency, timing) → Provide options
+   - For questions about context or personal experience → NO options, encourage free-form response
+3. When providing options, format like this:
+   Question: [Your single question here]
+   
+   Options:
+   - [Option 1]
+   - [Option 2]
+   - [Option 3]
+   - [Option 4 or "Other - specify"]
+4. When NOT providing options, just ask the question naturally and let them respond freely
+
+Your role:
+1. Have a natural, conversational discussion about their hypothesis
+2. Ask ONE thoughtful question at a time to understand:
+   - What intervention they want to test (e.g., "omega-3", "meditation", "exercise")
+   - What outcome they want to measure (e.g., "focus", "stress", "sleep quality")
+   - How often they'll do the intervention
+   - When they want to track the outcome
+   - What control variables might be relevant
+3. ALWAYS recommend a baseline tracking period (3-7 days) before starting the intervention. Explain that this helps establish a comparison point and makes the experiment more reliable. Don't ask if they want it - recommend it as a best practice.
+4. Provide helpful context and suggestions based on research when relevant
+5. Guide them toward creating a well-designed experiment
+6. Be conversational and natural - don't follow a rigid script
+
+When the user has provided enough information to create an experiment, set isReadyToCreate to true in the function call.`;
+
+  const chatMessages = [
+    { role: 'system' as const, content: systemPrompt },
+    ...messages
+  ];
+
+  // If we want to extract structured info, use function calling
+  const functions = extractInfo ? [
+    {
+      name: 'extract_hypothesis_info',
+      description: 'Extract structured information from the conversation when enough details have been gathered to create a hypothesis',
+      parameters: {
+        type: 'object',
+        properties: {
+          intervention: {
+            type: 'string',
+            description: 'The specific intervention being tested (e.g., "omega-3", "meditation", "morning exercise")'
+          },
+          outcome: {
+            type: 'string',
+            description: 'The outcome being measured (e.g., "focus", "stress level", "sleep quality")'
+          },
+          category: {
+            type: 'string',
+            enum: ['cognitive', 'physical', 'emotional', 'behavioral', 'sleep', 'nutrition', 'general'],
+            description: 'Category of the hypothesis'
+          },
+          frequency: {
+            type: 'string',
+            description: 'How often the intervention will be done (e.g., "daily", "3 times per week", "as needed")'
+          },
+          timing: {
+            type: 'string',
+            description: 'When to track the outcome (e.g., "morning", "evening", "throughout the day")'
+          },
+          outcomeContext: {
+            type: 'string',
+            description: 'Specific context for the outcome (e.g., "focus during work", "stress in social situations")'
+          },
+          wantsBaseline: {
+            type: 'boolean',
+            description: 'Always set to true - baseline tracking is always recommended as a best practice for experiments'
+          },
+          baselineDays: {
+            type: 'number',
+            description: 'Number of days for baseline period (default: 7 days, range: 3-7 days)'
+          },
+          selectedControls: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Control variables the user wants to track (e.g., ["sleep quality", "stress level", "caffeine intake"])'
+          },
+          isReadyToCreate: {
+            type: 'boolean',
+            description: 'Whether enough information has been gathered to create the hypothesis'
+          }
+        },
+        required: ['isReadyToCreate']
+      }
+    }
+  ] : undefined;
+
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: chatMessages,
+    temperature: 0.7,
+    ...(functions ? { 
+      tools: functions.map(f => ({ type: 'function', function: f })),
+      tool_choice: extractInfo ? 'auto' : undefined
+    } : {})
+  });
+
+  const message = response.choices[0].message;
+  let extractedInfo;
+
+  // Handle function calling if used
+  if (message.tool_calls && message.tool_calls.length > 0) {
+    const toolCall = message.tool_calls[0];
+    // Handle both standard and custom tool calls
+    if ('function' in toolCall && toolCall.function.name === 'extract_hypothesis_info') {
+      try {
+        extractedInfo = JSON.parse(toolCall.function.arguments);
+      } catch (e) {
+        console.error('Error parsing extracted info:', e);
+      }
+    }
+  }
+
+    return {
+      response: message.content || '',
+      extractedInfo
+    };
+  } catch (error) {
+    console.error('Error in chatWithAI:', error);
+    // Return a helpful error message
+    throw new Error(error instanceof Error ? error.message : 'Failed to get AI response. Please check your API key configuration.');
+  }
 }
 

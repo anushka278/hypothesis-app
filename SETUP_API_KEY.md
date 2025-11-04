@@ -13,7 +13,7 @@ Go to: **https://platform.openai.com/api-keys**
 Open the `.env` file in the `hypothesis-app` folder and replace the placeholder:
 
 ```
-NEXT_PUBLIC_OPENAI_API_KEY=sk-your-actual-key-here
+NEXT_PUBLIC_OPENAI_API_KEY=your-api-key-here
 ```
 
 **Important:**

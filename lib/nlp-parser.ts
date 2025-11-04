@@ -293,8 +293,8 @@ export function generateClarifyingQuestions(parsed: ParsedHypothesis): string[] 
     questions.push('What time of day do you want to track your focus/performance? (morning, afternoon, evening)');
   }
   
-  // Baseline question
-  questions.push('Would you like to track a baseline period (3-7 days) before starting the intervention?');
+  // Baseline is always recommended, so we don't ask about it
+  // It will be automatically included in the experiment setup
   
   return questions;
 }

@@ -23,7 +23,7 @@ Or create it manually in your code editor.
 Open `.env.local` and paste:
 
 ```
-OPENAI_API_KEY=sk-your-actual-key-here
+OPENAI_API_KEY=your-api-key-here
 ```
 
 Replace `sk-your-actual-key-here` with your actual key from OpenAI.
