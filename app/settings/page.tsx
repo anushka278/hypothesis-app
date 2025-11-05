@@ -3,27 +3,47 @@
 import { useState, useEffect } from 'react';
 import { AppSettings } from '@/lib/types';
 import { getAppSettings, updateAppSettings } from '@/lib/storage';
-import { Bell, Palette, Shield, ChevronRight, Moon, Sun, Link as LinkIcon, Smartphone, Watch, Plus, X, Trash2, Ruler } from 'lucide-react';
+import { Bell, Palette, Shield, ChevronRight, Moon, Sun, Link as LinkIcon, Smartphone, Watch, Plus, X, Trash2, Ruler, Upload, Loader2, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DataSource, ConnectedApp, ConnectedDevice } from '@/lib/types';
 import { getDataSources, saveDataSource, deleteDataSource } from '@/lib/storage';
 import AppHeader from '@/components/ui/AppHeader';
+import { requestNotificationPermission, restartNotificationScheduler } from '@/lib/notifications';
+import { parseWorkoutFile } from '@/lib/file-parsers';
+import { getStravaAuthUrl, getFitbitAuthUrl, getGarminAuthUrl, generateCodeVerifier } from '@/lib/api-clients';
+import { saveDataPoint, getActiveVariables } from '@/lib/storage';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addType, setAddType] = useState<'app' | 'device' | null>(null);
+  const [addType, setAddType] = useState<'app' | 'device' | 'upload' | null>(null);
   const [newItemName, setNewItemName] = useState('');
+  const [showAppSelection, setShowAppSelection] = useState(false);
+  const [showDeviceSelection, setShowDeviceSelection] = useState(false);
+  const [showSuggestApp, setShowSuggestApp] = useState(false);
+  const [suggestedAppName, setSuggestedAppName] = useState('');
+  const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
+  const [showSuggestionConfirmation, setShowSuggestionConfirmation] = useState(false);
+  const [confirmedAppName, setConfirmedAppName] = useState('');
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadError, setUploadError] = useState<string>('');
   const router = useRouter();
 
   useEffect(() => {
     const savedSettings = getAppSettings();
     setSettings(savedSettings);
     setDataSources(getDataSources());
+    
+    // Request notification permission if notifications are enabled
+    if (savedSettings.notifications.enabled && typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        requestNotificationPermission();
+      }
+    }
   }, []);
 
-  const handleToggle = (key: keyof AppSettings, value: any) => {
+  const handleToggle = async (key: keyof AppSettings, value: any) => {
     if (!settings) return;
     
     const updates: any = {};
@@ -37,6 +57,25 @@ export default function SettingsPage() {
     
     const updated = updateAppSettings(updates);
     setSettings(updated);
+    
+    // Handle notification permission and restart scheduler
+    if (key === 'notifications') {
+      // Request permission if notifications are being enabled
+      if (updated.notifications.enabled) {
+        const permission = await requestNotificationPermission();
+        if (permission === 'denied') {
+          // If permission was denied, disable notifications
+          const deniedSettings = updateAppSettings({ 
+            notifications: { ...updated.notifications, enabled: false } 
+          });
+          setSettings(deniedSettings);
+          alert('Notification permission was denied. Please enable it in your browser settings to use reminders.');
+          return;
+        }
+      }
+      // Restart scheduler when notification settings change
+      restartNotificationScheduler();
+    }
     
     // Apply color scheme immediately
     if (key === 'colorScheme') {
@@ -81,42 +120,143 @@ export default function SettingsPage() {
     );
   }
 
-  const handleAddApp = () => {
-    if (!newItemName.trim()) return;
-    
-    const newApp: ConnectedApp = {
-      id: `app-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: newItemName.trim(),
-      type: 'app',
-      appType: 'fitness',
-      connectedAt: new Date().toISOString(),
-      status: 'connected',
-    };
-    
-    saveDataSource(newApp);
-    setDataSources(getDataSources());
-    setShowAddModal(false);
-    setAddType(null);
-    setNewItemName('');
+  const handleConnectStrava = () => {
+    const clientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID || 'your-client-id';
+    const authUrl = getStravaAuthUrl(clientId);
+    window.location.href = authUrl;
   };
 
-  const handleAddDevice = () => {
-    if (!newItemName.trim()) return;
+  const handleConnectFitbit = () => {
+    const clientId = process.env.NEXT_PUBLIC_FITBIT_CLIENT_ID || 'your-client-id';
+    const authUrl = getFitbitAuthUrl(clientId);
+    window.location.href = authUrl;
+  };
+
+  const handleConnectGarmin = async () => {
+    const clientId = process.env.NEXT_PUBLIC_GARMIN_CLIENT_ID || 'your-client-id';
     
-    const newDevice: ConnectedDevice = {
-      id: `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: newItemName.trim(),
-      type: 'device',
-      deviceType: 'watch',
-      connectedAt: new Date().toISOString(),
-      status: 'connected',
+    // Generate PKCE code verifier and challenge
+    const codeVerifier = generateCodeVerifier();
+    
+    // Store code verifier in session storage for later use in callback
+    sessionStorage.setItem('garmin_code_verifier', codeVerifier);
+    
+    // Generate authorization URL with PKCE
+    const authUrl = await getGarminAuthUrl(clientId, codeVerifier);
+    window.location.href = authUrl;
+  };
+
+  const handleSuggestApp = () => {
+    setShowAppSelection(false);
+    setShowSuggestApp(true);
+  };
+
+  const handleSubmitSuggestion = async () => {
+    if (!suggestedAppName.trim()) return;
+
+    setIsSubmittingSuggestion(true);
+
+    try {
+      const response = await fetch('/api/suggest-app', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appName: suggestedAppName.trim(),
+          appId: 'default', // You can customize this per deployment
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit suggestion');
+      }
+
+      // Close suggest modal and show confirmation
+      setShowSuggestApp(false);
+      setConfirmedAppName(suggestedAppName.trim());
+      setSuggestedAppName('');
+      setShowSuggestionConfirmation(true);
+
+      // Auto-hide confirmation after 5 seconds
+      setTimeout(() => {
+        setShowSuggestionConfirmation(false);
+      }, 5000);
+    } catch (error) {
+      console.error('Error submitting suggestion:', error);
+      alert('Failed to submit suggestion. Please try again.');
+    } finally {
+      setIsSubmittingSuggestion(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    setUploadError('');
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsedData = parseWorkoutFile(file.name, content);
+
+        // Find or create exercise variable
+        const variables = getActiveVariables();
+        let exerciseVariable = variables.find(v => 
+          v.name.toLowerCase().includes('exercise') || 
+          v.name.toLowerCase().includes('workout')
+        );
+
+        if (!exerciseVariable) {
+          // Create a default exercise variable if none exists
+          alert('No exercise variable found. Please create a hypothesis with exercise tracking first.');
+          setUploadingFile(false);
+          return;
+        }
+
+        // Save data points from the parsed workout
+        parsedData.dataPoints.forEach((point, index) => {
+          if (point.timestamp) {
+            const dataPoint = {
+              id: `dp-upload-${Date.now()}-${index}`,
+              variableId: exerciseVariable!.id,
+              value: point.distance ? point.distance / 1000 : 1, // Convert meters to km or use 1 for binary
+              date: new Date(point.timestamp).toISOString(),
+              metadata: {
+                exerciseType: 'uploaded',
+                duration: parsedData.dataPoints.length * 60, // Estimate
+                distance: point.distance,
+                averageHeartRate: parsedData.averageHeartRate,
+                maxHeartRate: parsedData.maxHeartRate,
+                elevation: point.elevation,
+                latitude: point.latitude,
+                longitude: point.longitude,
+              },
+            };
+            saveDataPoint(dataPoint);
+          }
+        });
+
+        alert(`Successfully imported ${parsedData.dataPoints.length} data points from ${file.name}`);
+        setUploadingFile(false);
+        // Reset file input
+        event.target.value = '';
+      } catch (error) {
+        console.error('File parsing error:', error);
+        setUploadError('Failed to parse file. Please ensure it is a valid GPX, TCX, or XML file.');
+        setUploadingFile(false);
+      }
     };
-    
-    saveDataSource(newDevice);
-    setDataSources(getDataSources());
-    setShowAddModal(false);
-    setAddType(null);
-    setNewItemName('');
+
+    reader.onerror = () => {
+      setUploadError('Failed to read file.');
+      setUploadingFile(false);
+    };
+
+    reader.readAsText(file);
   };
 
   const handleDeleteSource = (id: string) => {
@@ -262,26 +402,30 @@ export default function SettingsPage() {
             )}
 
             {/* Add Buttons */}
-            <div className="flex gap-3 pt-2">
+            <div className="grid grid-cols-3 gap-2 pt-2">
               <button
-                onClick={() => {
-                  setAddType('app');
-                  setShowAddModal(true);
-                }}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 transition-colors"
+                onClick={() => setShowAppSelection(true)}
+                className="flex flex-col items-center justify-center gap-2 px-3 py-3 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 transition-colors"
               >
-                <Plus className="w-4 h-4" />
-                <span>Add App</span>
+                <Smartphone className="w-5 h-5" />
+                <span className="text-xs">Add App</span>
+              </button>
+              <button
+                onClick={() => setShowDeviceSelection(true)}
+                className="flex flex-col items-center justify-center gap-2 px-3 py-3 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 transition-colors"
+              >
+                <Watch className="w-5 h-5" />
+                <span className="text-xs">Add Device</span>
               </button>
               <button
                 onClick={() => {
-                  setAddType('device');
+                  setAddType('upload');
                   setShowAddModal(true);
                 }}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 transition-colors"
+                className="flex flex-col items-center justify-center gap-2 px-3 py-3 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 transition-colors"
               >
-                <Plus className="w-4 h-4" />
-                <span>Add Device</span>
+                <Upload className="w-5 h-5" />
+                <span className="text-xs">Upload Data</span>
               </button>
             </div>
           </div>
@@ -479,19 +623,17 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Add Modal */}
-      {showAddModal && (
+      {/* Upload Data Modal */}
+      {showAddModal && addType === 'upload' && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-foreground">
-                Add {addType === 'app' ? 'App' : 'Device'}
-              </h3>
+              <h3 className="text-lg font-semibold text-foreground">Upload Data</h3>
               <button
                 onClick={() => {
                   setShowAddModal(false);
                   setAddType(null);
-                  setNewItemName('');
+                  setUploadError('');
                 }}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -501,21 +643,27 @@ export default function SettingsPage() {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {addType === 'app' ? 'App' : 'Device'} Name
+                Select workout file (GPX, TCX, or XML)
               </label>
               <input
-                type="text"
-                value={newItemName}
-                onChange={(e) => setNewItemName(e.target.value)}
-                placeholder={addType === 'app' ? 'e.g., Strava, Runna' : 'e.g., Apple Watch, Fitbit'}
+                type="file"
+                accept=".gpx,.tcx,.xml"
+                onChange={handleFileUpload}
+                disabled={uploadingFile}
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent bg-white dark:bg-gray-700 text-foreground"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    addType === 'app' ? handleAddApp() : handleAddDevice();
-                  }
-                }}
               />
+              {uploadingFile && (
+                <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Processing file...</span>
+                </div>
+              )}
+              {uploadError && (
+                <p className="mt-2 text-sm text-red-500">{uploadError}</p>
+              )}
+              <p className="mt-2 text-xs text-gray-500">
+                Supported formats: GPX, TCX, XML. Files will be parsed for workout data including heart rate, distance, and timestamps.
+              </p>
             </div>
             
             <div className="flex gap-3">
@@ -523,19 +671,266 @@ export default function SettingsPage() {
                 onClick={() => {
                   setShowAddModal(false);
                   setAddType(null);
-                  setNewItemName('');
+                  setUploadError('');
                 }}
                 className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* App Selection Modal */}
+      {showAppSelection && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Connect an App</h3>
+              <button
+                onClick={() => setShowAppSelection(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              <button
+                onClick={handleConnectStrava}
+                className="w-full flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold">
+                  S
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-medium text-foreground">Strava</p>
+                  <p className="text-xs text-gray-500">Connect your Strava account to sync activities</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </button>
+
+              <button
+                onClick={handleConnectFitbit}
+                className="w-full flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold">
+                  F
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-medium text-foreground">Fitbit</p>
+                  <p className="text-xs text-gray-500">Connect your Fitbit account to sync activities</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </button>
+
+              <button
+                onClick={handleConnectGarmin}
+                className="w-full flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center text-white font-bold">
+                  G
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-medium text-foreground">Garmin Connect</p>
+                  <p className="text-xs text-gray-500">Connect your Garmin account to sync activities</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </button>
+
+              <button
+                onClick={handleSuggestApp}
+                className="w-full flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center text-white font-bold">
+                  +
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-medium text-foreground">Suggest an App...</p>
+                  <p className="text-xs text-gray-500">Request a new app integration</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suggest App Modal */}
+      {showSuggestApp && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Suggest an App</h3>
+              <button
+                onClick={() => {
+                  setShowSuggestApp(false);
+                  setSuggestedAppName('');
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                What app would you like us to add?
+              </label>
+              <input
+                type="text"
+                value={suggestedAppName}
+                onChange={(e) => setSuggestedAppName(e.target.value)}
+                placeholder="e.g., Whoop, Oura, MyFitnessPal"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent bg-white dark:bg-gray-700 text-foreground"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && suggestedAppName.trim()) {
+                    handleSubmitSuggestion();
+                  }
+                }}
+                disabled={isSubmittingSuggestion}
+              />
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowSuggestApp(false);
+                  setSuggestedAppName('');
+                }}
+                disabled={isSubmittingSuggestion}
+                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                onClick={addType === 'app' ? handleAddApp : handleAddDevice}
-                disabled={!newItemName.trim()}
+                onClick={handleSubmitSuggestion}
+                disabled={!suggestedAppName.trim() || isSubmittingSuggestion}
                 className="flex-1 px-4 py-2 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Connect
+                {isSubmittingSuggestion ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Submitting...
+                  </span>
+                ) : (
+                  'Submit Suggestion'
+                )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suggestion Confirmation Toast */}
+      {showSuggestionConfirmation && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="font-semibold text-foreground mb-2">Thank you for the suggestion!</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  We're always working to add new connections.
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  In the meantime, most apps (including <strong>{confirmedAppName}</strong>) allow you to export your data. You can use our <strong>'Upload Data'</strong> feature to import your .gpx or .tcx files.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSuggestionConfirmation(false)}
+                className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Device Selection Modal */}
+      {showDeviceSelection && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Connect a Device</h3>
+              <button
+                onClick={() => setShowDeviceSelection(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <div className="flex items-start gap-3 mb-3">
+                  <Watch className="w-6 h-6 text-[var(--accent)] mt-1" />
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground mb-1">Apple Watch</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      To sync your Apple Watch data:
+                    </p>
+                  </div>
+                </div>
+                <div className="ml-9 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <p>• Export your workout from the Apple Health app as an XML file</p>
+                  <p>• Use the "Upload Data" option to import the file</p>
+                  <p>• Or connect to Strava (if you sync your Apple Watch to Strava) via "Add App"</p>
+                </div>
+              </div>
+
+              <div className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <div className="flex items-start gap-3 mb-3">
+                  <Watch className="w-6 h-6 text-[var(--accent)] mt-1" />
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground mb-1">Whoop</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      To sync your Whoop data:
+                    </p>
+                  </div>
+                </div>
+                <div className="ml-9 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <p>• Export your workout data from the Whoop app</p>
+                  <p>• Use the "Upload Data" option to import GPX or TCX files</p>
+                  <p>• Or connect to Strava if you sync Whoop to Strava</p>
+                </div>
+              </div>
+
+              <div className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <div className="flex items-start gap-3 mb-3">
+                  <Watch className="w-6 h-6 text-[var(--accent)] mt-1" />
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground mb-1">Oura Ring</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      To sync your Oura Ring data:
+                    </p>
+                  </div>
+                </div>
+                <div className="ml-9 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <p>• Export your workout data from the Oura app</p>
+                  <p>• Use the "Upload Data" option to import the exported files</p>
+                </div>
+              </div>
+
+              <div className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <div className="flex items-start gap-3 mb-3">
+                  <Watch className="w-6 h-6 text-[var(--accent)] mt-1" />
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground mb-1">Other Devices</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      For other fitness trackers:
+                    </p>
+                  </div>
+                </div>
+                <div className="ml-9 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <p>• Check if your device syncs with Strava, Fitbit, or Garmin Connect</p>
+                  <p>• Connect via "Add App" if available</p>
+                  <p>• Otherwise, export your data and use "Upload Data"</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

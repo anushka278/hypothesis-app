@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { getAppSettings } from '@/lib/storage';
 import BottomNav from '@/components/ui/BottomNav';
+import { startNotificationScheduler } from '@/lib/notifications';
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -14,6 +15,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       html.classList.remove('dark');
     }
     html.setAttribute('data-accent', settings.accentColor);
+    
+    // Start notification scheduler
+    startNotificationScheduler();
   }, []);
 
   return (
