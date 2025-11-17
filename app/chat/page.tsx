@@ -78,8 +78,11 @@ function ChatPageContent() {
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, knowledgeCardAfterMessageId]);
+    // Don't auto-scroll if summary is visible - user might be reviewing it
+    if (!showSummary) {
+      scrollToBottom();
+    }
+  }, [messages, knowledgeCardAfterMessageId, showSummary]);
 
   useEffect(() => {
     setConversations(getConversations());
@@ -110,10 +113,13 @@ function ChatPageContent() {
     const allConversations = getConversations();
     if (allConversations.length > 0 && messages.length === 0) {
       const mostRecent = allConversations[0];
-      // Load if it has actual conversation (more than just welcome) and isn't complete
-      if (mostRecent && mostRecent.messages.length > 1 && mostRecent.state.step !== 'complete') {
-        loadConversation(mostRecent);
-        return;
+      // Load if it has actual conversation (more than just welcome)
+      // Also load if it's complete but has a summary visible (user wants to review it)
+      if (mostRecent && mostRecent.messages.length > 1) {
+        if (mostRecent.state.step !== 'complete' || mostRecent.state.showSummary) {
+          loadConversation(mostRecent);
+          return;
+        }
       }
     }
     
@@ -165,6 +171,8 @@ function ChatPageContent() {
           clarifyingQuestions: state.clarifyingQuestions,
           step: step,
           knowledgeCardAfterMessageId: knowledgeCardAfterMessageId,
+          showSummary: showSummary,
+          summaryMessageId: summaryMessageId,
         },
         createdAt: existingConversation?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -173,7 +181,7 @@ function ChatPageContent() {
       saveConversation(conversation);
       setConversations(getConversations());
     }
-  }, [messages, state, step, knowledgeCardAfterMessageId, currentConversationId, isLoadingConversation]);
+  }, [messages, state, step, knowledgeCardAfterMessageId, showSummary, summaryMessageId, currentConversationId, isLoadingConversation]);
 
   const addMessage = (content: string, role: 'assistant' | 'user'): string => {
     const msgId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -188,7 +196,8 @@ function ChatPageContent() {
   };
 
   const handleUserMessage = async (content: string) => {
-    if (step === 'complete') return;
+    // Allow continuing conversation even after experiment is created
+    // User can make adjustments or ask questions
     
     // Handle responses to knowledge card prompt (if user types instead of clicking)
     if (showKnowledgeCardPrompt) {
@@ -635,6 +644,8 @@ function ChatPageContent() {
     setStep(newStep);
     setKnowledgeCardAfterMessageId(conversation.state.knowledgeCardAfterMessageId || null);
     setHasShownKnowledgeCard(!!conversation.state.knowledgeCard);
+    setShowSummary(conversation.state.showSummary || false);
+    setSummaryMessageId(conversation.state.summaryMessageId || null);
     setCurrentConversationId(conversation.id);
     // Allow saving after a brief delay
     setTimeout(() => setIsLoadingConversation(false), 100);
@@ -906,9 +917,8 @@ function ChatPageContent() {
     );
     setStep('complete');
     
-    setTimeout(() => {
-      router.push('/dashboard');
-    }, 3000);
+    // Don't automatically redirect - let user navigate manually
+    // They can switch to Track tab when ready, and the chat will stay where it is
   };
 
   return (
@@ -991,7 +1001,7 @@ function ChatPageContent() {
                   baselineDays={state.baselineDays}
                   selectedControls={state.selectedControls}
                   onConfirm={() => {
-                    setShowSummary(false);
+                    // Keep summary visible - don't hide it
                     // Check if there are active hypotheses
                     const activeHypotheses = getActiveHypotheses();
                     if (activeHypotheses.length > 0) {
@@ -1267,7 +1277,7 @@ function ChatPageContent() {
         <div className="max-w-2xl mx-auto">
           <ChatInput
             onSend={handleUserMessage}
-            disabled={isProcessing || step === 'complete'}
+            disabled={isProcessing}
             placeholder={isProcessing ? 'Processing...' : 'Type your message...'}
             autoFocus={shouldFocusInput}
           />

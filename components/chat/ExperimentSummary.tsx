@@ -60,9 +60,9 @@ export default function ExperimentSummary({
 
         {/* Intervention & Outcome */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+          <div className="bg-gradient-to-r from-[var(--accent)]/10 to-[var(--accent)]/5 rounded-xl p-4 border border-[var(--accent)]/20">
             <div className="flex items-start gap-3">
-              <FlaskConical className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <FlaskConical className="w-5 h-5 text-[var(--accent)] mt-0.5 flex-shrink-0" />
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">Intervention</h4>
                 <p className="text-gray-700 dark:text-gray-300 text-sm font-medium capitalize">{parsed.intervention}</p>
@@ -70,9 +70,9 @@ export default function ExperimentSummary({
             </div>
           </div>
 
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
+          <div className="bg-gradient-to-r from-[var(--accent)]/10 to-[var(--accent)]/5 rounded-xl p-4 border border-[var(--accent)]/20">
             <div className="flex items-start gap-3">
-              <BarChart3 className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+              <BarChart3 className="w-5 h-5 text-[var(--accent)] mt-0.5 flex-shrink-0" />
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">Outcome</h4>
                 <p className="text-gray-700 dark:text-gray-300 text-sm font-medium capitalize">{parsed.outcome}</p>
@@ -84,9 +84,9 @@ export default function ExperimentSummary({
         {/* Details */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {frequency && (
-            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
+            <div className="bg-gradient-to-r from-[var(--accent)]/10 to-[var(--accent)]/5 rounded-xl p-4 border border-[var(--accent)]/20">
               <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+                <Clock className="w-5 h-5 text-[var(--accent)] mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
                   <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">Frequency</h4>
                   <p className="text-gray-700 dark:text-gray-300 text-sm">{frequency}</p>
@@ -96,9 +96,9 @@ export default function ExperimentSummary({
           )}
 
           {timing && (
-            <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 border border-orange-200 dark:border-orange-800">
+            <div className="bg-gradient-to-r from-[var(--accent)]/10 to-[var(--accent)]/5 rounded-xl p-4 border border-[var(--accent)]/20">
               <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                <Clock className="w-5 h-5 text-[var(--accent)] mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
                   <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">Timing</h4>
                   <p className="text-gray-700 dark:text-gray-300 text-sm">{timing}</p>
@@ -110,9 +110,9 @@ export default function ExperimentSummary({
 
         {/* Context */}
         {outcomeContext && (
-          <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 border border-indigo-200 dark:border-indigo-800">
+          <div className="bg-gradient-to-r from-[var(--accent)]/10 to-[var(--accent)]/5 rounded-xl p-4 border border-[var(--accent)]/20">
             <div className="flex items-start gap-3">
-              <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
+              <Target className="w-5 h-5 text-[var(--accent)] mt-0.5 flex-shrink-0" />
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">Context</h4>
                 <p className="text-gray-700 dark:text-gray-300 text-sm">{outcomeContext}</p>
@@ -122,9 +122,9 @@ export default function ExperimentSummary({
         )}
 
         {/* Baseline - Always Recommended */}
-        <div className="rounded-xl p-4 border bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800">
+        <div className="bg-gradient-to-r from-[var(--accent)]/10 to-[var(--accent)]/5 rounded-xl p-4 border border-[var(--accent)]/20">
           <div className="flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-[var(--accent)]" />
             <div className="flex-1">
               <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">Baseline Period (Recommended)</h4>
               <p className="text-gray-700 dark:text-gray-300 text-sm">
@@ -136,16 +136,16 @@ export default function ExperimentSummary({
 
         {/* Control Variables */}
         {selectedControls.length > 0 && (
-          <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
+          <div className="bg-gradient-to-r from-[var(--accent)]/10 to-[var(--accent)]/5 rounded-xl p-4 border border-[var(--accent)]/20">
             <div className="flex items-start gap-3">
-              <BarChart3 className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+              <BarChart3 className="w-5 h-5 text-[var(--accent)] mt-0.5 flex-shrink-0" />
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 dark:text-white mb-2 text-sm">Control Variables</h4>
                 <div className="flex flex-wrap gap-2">
                   {selectedControls.map((control, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300"
+                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white dark:bg-gray-800 border border-[var(--accent)]/30 text-[var(--accent)]"
                     >
                       {control}
                     </span>

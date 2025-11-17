@@ -106,6 +106,8 @@ export interface Conversation {
     clarifyingQuestions: string[];
     step: string;
     knowledgeCardAfterMessageId?: string | null;
+    showSummary?: boolean;
+    summaryMessageId?: string | null;
   };
   createdAt: string;
   updatedAt: string;
