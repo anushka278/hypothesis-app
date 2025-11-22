@@ -212,10 +212,15 @@ function ChatPageContent() {
         const loadingMsgId = addMessage("We're pulling that up...", 'assistant');
         
         try {
-          const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
-          const knowledgeCard = useAI
-            ? await generateKnowledgeCardWithAI(state.parsed.intervention, state.parsed.outcome, state.parsed.category)
-            : generateKnowledgeCard(state.parsed.intervention, state.parsed.outcome, state.parsed.category);
+          // Try AI first, fallback to mock if API key not configured
+          let knowledgeCard;
+          try {
+            knowledgeCard = await generateKnowledgeCardWithAI(state.parsed.intervention, state.parsed.outcome, state.parsed.category);
+          } catch (error) {
+            // Fallback to mock if API fails
+            console.warn('AI knowledge card generation failed, using mock:', error);
+            knowledgeCard = generateKnowledgeCard(state.parsed.intervention, state.parsed.outcome, state.parsed.category);
+          }
           
           // Remove loading message
           setMessages(prev => prev.filter(msg => msg.id !== loadingMsgId));
@@ -237,15 +242,14 @@ function ChatPageContent() {
             // that continues the conversation
             setIsProcessing(true);
             try {
-              const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
-              if (useAI) {
-                const openAIMessages = messages
-                  .filter(msg => msg.id !== 'welcome' && msg.id !== loadingMsgId)
-                  .map(msg => ({
-                    role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
-                    content: msg.content
-                  }));
-                
+              const openAIMessages = messages
+                .filter(msg => msg.id !== 'welcome' && msg.id !== loadingMsgId)
+                .map(msg => ({
+                  role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+                  content: msg.content
+                }));
+              
+              try {
                 const result = await chatWithAI(openAIMessages, true);
                 const options = parseOptionsFromResponse(result.response);
                 const responseText = options.length > 0 
@@ -289,6 +293,9 @@ function ChatPageContent() {
                     }));
                   }
                 }
+              } catch (error) {
+                console.error('Error in AI chat:', error);
+                addMessage("I'm having trouble connecting to the AI service. Please check your API key configuration.", 'assistant');
               }
             } catch (error) {
               console.error('Error starting conversation:', error);
@@ -311,15 +318,14 @@ function ChatPageContent() {
         setTimeout(async () => {
           setIsProcessing(true);
           try {
-            const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
-            if (useAI) {
-              const openAIMessages = messages
-                .filter(msg => msg.id !== 'welcome')
-                .map(msg => ({
-                  role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
-                  content: msg.content
-                }));
-              
+            const openAIMessages = messages
+              .filter(msg => msg.id !== 'welcome')
+              .map(msg => ({
+                role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+                content: msg.content
+              }));
+            
+            try {
               const result = await chatWithAI(openAIMessages, true);
               const options = parseOptionsFromResponse(result.response);
               const responseText = options.length > 0 
@@ -363,6 +369,9 @@ function ChatPageContent() {
                   }));
                 }
               }
+            } catch (error) {
+              console.error('Error in AI chat:', error);
+              addMessage("I'm having trouble connecting to the AI service. Please check your API key configuration.", 'assistant');
             }
           } catch (error) {
             console.error('Error starting conversation:', error);
@@ -389,19 +398,6 @@ function ChatPageContent() {
     setShouldFocusInput(false); // Reset focus flag when user sends message
 
     try {
-      // Check if OpenAI API key is available
-      const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
-      
-      if (!useAI) {
-        // Fallback to basic response if no API key
-        addMessage(
-          "I'd love to help you design your experiment! However, I need an OpenAI API key to have a natural conversation. Please set up your API key in the .env.local file. For now, you can try one of the example hypotheses above.",
-          'assistant'
-        );
-        setIsProcessing(false);
-        return;
-      }
-
       // Convert our messages to OpenAI format
       // Skip the welcome message as it's already in the system prompt
       const openAIMessages = messages
@@ -430,10 +426,15 @@ function ChatPageContent() {
       // For the first message, try to parse it first and go straight to knowledge card/recommendation offer
       if (isFirstUserMessage && !hasShownKnowledgeCard && !state.parsed) {
         try {
-          const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
-          const parsed = useAI 
-            ? await parseHypothesisWithAI(content)
-            : parseHypothesis(content);
+          // Try AI parsing first, fallback to mock if API key not configured
+          let parsed;
+          try {
+            parsed = await parseHypothesisWithAI(content);
+          } catch (error) {
+            // Fallback to mock parser if API fails
+            console.warn('AI parsing failed, using mock parser:', error);
+            parsed = parseHypothesis(content);
+          }
           
           if (parsed && parsed.intervention && parsed.outcome && parsed.intervention !== 'intervention' && parsed.outcome !== 'outcome') {
             setState(prev => ({
@@ -520,10 +521,15 @@ function ChatPageContent() {
         // If no extracted info but this is the first message, try to parse it immediately
         // This handles cases where the AI doesn't use function calling on the first message
         try {
-          const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
-          const parsed = useAI 
-            ? await parseHypothesisWithAI(content)
-            : parseHypothesis(content);
+          // Try AI parsing first, fallback to mock if API key not configured
+          let parsed;
+          try {
+            parsed = await parseHypothesisWithAI(content);
+          } catch (error) {
+            // Fallback to mock parser if API fails
+            console.warn('AI parsing failed, using mock parser:', error);
+            parsed = parseHypothesis(content);
+          }
           
           if (parsed && parsed.intervention && parsed.outcome && parsed.intervention !== 'intervention' && parsed.outcome !== 'outcome') {
             setState(prev => ({
@@ -565,7 +571,7 @@ function ChatPageContent() {
       // If it's an API key error, provide helpful guidance
       if (errorMessage.includes('API key') || errorMessage.includes('OpenAI')) {
         addMessage(
-          "I need an OpenAI API key to have a conversation. Please set NEXT_PUBLIC_OPENAI_API_KEY in your .env.local file. See SETUP_API_KEY.md for instructions.",
+          "I need an OpenAI API key to have a conversation. Please set OPENAI_API_KEY in your .env.local file. See SETUP_API_KEY.md for instructions.",
           'assistant'
         );
       } else {
@@ -1072,10 +1078,15 @@ function ChatPageContent() {
                         const loadingMsgId = addMessage("We're pulling that up...", 'assistant');
                         
                         try {
-                          const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
-                          const knowledgeCard = useAI
-                            ? await generateKnowledgeCardWithAI(state.parsed!.intervention, state.parsed!.outcome, state.parsed!.category)
-                            : generateKnowledgeCard(state.parsed!.intervention, state.parsed!.outcome, state.parsed!.category);
+                          // Try AI first, fallback to mock if API key not configured
+                          let knowledgeCard;
+                          try {
+                            knowledgeCard = await generateKnowledgeCardWithAI(state.parsed!.intervention, state.parsed!.outcome, state.parsed!.category);
+                          } catch (error) {
+                            // Fallback to mock if API fails
+                            console.warn('AI knowledge card generation failed, using mock:', error);
+                            knowledgeCard = generateKnowledgeCard(state.parsed!.intervention, state.parsed!.outcome, state.parsed!.category);
+                          }
                           
                           // Remove loading message
                           setMessages(prev => prev.filter(msg => msg.id !== loadingMsgId));
@@ -1095,15 +1106,14 @@ function ChatPageContent() {
                           setTimeout(async () => {
                             setIsProcessing(true);
                             try {
-                              const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
-                              if (useAI) {
-                                const openAIMessages = messages
-                                  .filter(msg => msg.id !== 'welcome' && msg.id !== loadingMsgId)
-                                  .map(msg => ({
-                                    role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
-                                    content: msg.content
-                                  }));
-                                
+                              const openAIMessages = messages
+                                .filter(msg => msg.id !== 'welcome' && msg.id !== loadingMsgId)
+                                .map(msg => ({
+                                  role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+                                  content: msg.content
+                                }));
+                              
+                              try {
                                 const result = await chatWithAI(openAIMessages, true);
                                 const options = parseOptionsFromResponse(result.response);
                                 const responseText = options.length > 0 
@@ -1147,6 +1157,9 @@ function ChatPageContent() {
                                     }));
                                   }
                                 }
+                              } catch (error) {
+                                console.error('Error in AI chat:', error);
+                                addMessage("I'm having trouble connecting to the AI service. Please check your API key configuration.", 'assistant');
                               }
                             } catch (error) {
                               console.error('Error starting conversation:', error);
@@ -1166,15 +1179,14 @@ function ChatPageContent() {
                         setTimeout(async () => {
                           setIsProcessing(true);
                           try {
-                            const useAI = !!process.env.NEXT_PUBLIC_OPENAI_API_KEY && process.env.NEXT_PUBLIC_OPENAI_API_KEY !== 'your-api-key-here';
-                            if (useAI) {
-                              const openAIMessages = messages
-                                .filter(msg => msg.id !== 'welcome')
-                                .map(msg => ({
-                                  role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
-                                  content: msg.content
-                                }));
-                              
+                            const openAIMessages = messages
+                              .filter(msg => msg.id !== 'welcome')
+                              .map(msg => ({
+                                role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+                                content: msg.content
+                              }));
+                            
+                            try {
                               const result = await chatWithAI(openAIMessages, true);
                               const options = parseOptionsFromResponse(result.response);
                               const responseText = options.length > 0 
@@ -1218,6 +1230,9 @@ function ChatPageContent() {
                                   }));
                                 }
                               }
+                            } catch (error) {
+                              console.error('Error in AI chat:', error);
+                              addMessage("I'm having trouble connecting to the AI service. Please check your API key configuration.", 'assistant');
                             }
                           } catch (error) {
                             console.error('Error starting conversation:', error);

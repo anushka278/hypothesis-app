@@ -199,6 +199,14 @@ export default function ExerciseInput({ value, onChange, onSkip, onCancel, onNot
         <SkipForward className="w-4 h-4" />
         Just log "Yes" without details
       </button>
+      {onCancel && (
+        <button
+          onClick={onCancel}
+          className="w-full text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
+          Cancel
+        </button>
+      )}
     </div>
   );
 }

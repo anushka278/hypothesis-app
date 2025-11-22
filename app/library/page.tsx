@@ -4,18 +4,21 @@ import { useState, useEffect } from 'react';
 import { Hypothesis } from '@/lib/types';
 import { getHypotheses, archiveHypothesis } from '@/lib/storage';
 import Card from '@/components/ui/Card';
-import { BookOpen, Archive, CheckCircle, MessageSquare } from 'lucide-react';
+import ConclusionReport from '@/components/insights/ConclusionReport';
+import { BookOpen, Archive, CheckCircle, MessageSquare, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import AppHeader from '@/components/ui/AppHeader';
 import { useRouter } from 'next/navigation';
 
 export default function LibraryPage() {
   const [hypotheses, setHypotheses] = useState<Hypothesis[]>([]);
   const [showArchived, setShowArchived] = useState(false);
+  const [showConclusionReport, setShowConclusionReport] = useState(false);
+  const [selectedHypothesis, setSelectedHypothesis] = useState<Hypothesis | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     setHypotheses(getHypotheses());
-  }, []);
+  }, [showConclusionReport]);
 
   const handleArchive = (id: string) => {
     archiveHypothesis(id);
@@ -28,8 +31,49 @@ export default function LibraryPage() {
     }
   };
 
-  const activeHypotheses = hypotheses.filter(h => !h.archived);
-  const archivedHypotheses = hypotheses.filter(h => h.archived);
+  const handleOpenConclusionReport = (hypothesis: Hypothesis) => {
+    if (hypothesis.conclusion || hypothesis.status === 'concluded') {
+      setSelectedHypothesis(hypothesis);
+      setShowConclusionReport(true);
+    }
+  };
+
+  const getVerdictBadge = (hypothesis: Hypothesis) => {
+    if (!hypothesis.conclusion) return null;
+    
+    const verdict = hypothesis.conclusion.verdict;
+    const verdictConfig = {
+      supported: {
+        label: 'SUPPORTED',
+        icon: CheckCircle2,
+        color: 'text-green-600',
+        bgColor: 'bg-green-50',
+        borderColor: 'border-green-200',
+        badgeColor: 'bg-green-600',
+      },
+      rejected: {
+        label: 'REJECTED',
+        icon: XCircle,
+        color: 'text-red-600',
+        bgColor: 'bg-red-50',
+        borderColor: 'border-red-200',
+        badgeColor: 'bg-red-600',
+      },
+      inconclusive: {
+        label: 'INCONCLUSIVE',
+        icon: HelpCircle,
+        color: 'text-gray-600',
+        bgColor: 'bg-gray-50',
+        borderColor: 'border-gray-200',
+        badgeColor: 'bg-gray-600',
+      },
+    };
+    
+    return verdictConfig[verdict];
+  };
+
+  const activeHypotheses = hypotheses.filter(h => !h.archived && h.status !== 'concluded');
+  const archivedHypotheses = hypotheses.filter(h => h.archived || h.status === 'concluded');
   const displayHypotheses = showArchived ? archivedHypotheses : activeHypotheses;
 
   return (
@@ -80,7 +124,15 @@ export default function LibraryPage() {
           ) : (
             <div className="space-y-4">
               {displayHypotheses.map(hypothesis => (
-                <Card key={hypothesis.id}>
+                <Card 
+                  key={hypothesis.id}
+                  className={hypothesis.conclusion || hypothesis.status === 'concluded' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}
+                  onClick={() => {
+                    if (hypothesis.conclusion || hypothesis.status === 'concluded') {
+                      handleOpenConclusionReport(hypothesis);
+                    }
+                  }}
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="font-semibold text-foreground mb-2">
@@ -134,8 +186,26 @@ export default function LibraryPage() {
                         )}
                       </div>
                       
-                      {/* Baseline Phase Info */}
-                      {hypothesis.baselinePhase && (
+                      {/* Verdict Badge (for concluded experiments) or Baseline Phase Info */}
+                      {hypothesis.conclusion || hypothesis.status === 'concluded' ? (
+                        (() => {
+                          const badge = getVerdictBadge(hypothesis);
+                          if (!badge) return null;
+                          const VerdictIcon = badge.icon;
+                          return (
+                            <div className="mb-2">
+                              <div
+                                className={`inline-flex items-center gap-2 ${badge.bgColor} ${badge.borderColor} border rounded-lg px-3 py-1.5`}
+                              >
+                                <VerdictIcon className={`w-4 h-4 ${badge.color}`} />
+                                <span className={`text-xs font-bold ${badge.badgeColor} text-white px-2 py-0.5 rounded`}>
+                                  {badge.label}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : hypothesis.baselinePhase ? (
                         <div className="mb-2 text-xs text-gray-600 flex items-center gap-1">
                           <CheckCircle className="w-3 h-3" />
                           <span>
@@ -144,7 +214,7 @@ export default function LibraryPage() {
                               'Baseline phase in progress'}
                           </span>
                         </div>
-                      )}
+                      ) : null}
                       
                       <p className="text-xs text-gray-500">
                         Created {new Date(hypothesis.createdAt).toLocaleDateString()}
@@ -183,6 +253,23 @@ export default function LibraryPage() {
           )}
         </div>
       </div>
+
+      {/* Conclusion Report Modal */}
+      {showConclusionReport && selectedHypothesis && (
+        <ConclusionReport
+          hypothesis={selectedHypothesis}
+          onKeepTracking={() => {
+            setShowConclusionReport(false);
+            setSelectedHypothesis(null);
+          }}
+          onArchiveAndClose={() => {
+            // Already archived, just close
+            setShowConclusionReport(false);
+            setSelectedHypothesis(null);
+            setHypotheses(getHypotheses());
+          }}
+        />
+      )}
     </div>
   );
 }

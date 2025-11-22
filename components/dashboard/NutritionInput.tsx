@@ -119,6 +119,14 @@ export default function NutritionInput({ value, onChange, onCancel }: NutritionI
           >
             Log Meal
           </button>
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </div>
     );
@@ -144,6 +152,14 @@ export default function NutritionInput({ value, onChange, onCancel }: NutritionI
           );
         })}
       </div>
+      {onCancel && (
+        <button
+          onClick={onCancel}
+          className="w-full text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
+          Cancel
+        </button>
+      )}
     </div>
   );
 }

@@ -1,16 +1,164 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Variable, DataPoint, DataSource } from '@/lib/types';
 import { saveDataPoint, getRecentDataPoints, getDataSources, saveVariable, getDataPoints } from '@/lib/storage';
 import Card from '@/components/ui/Card';
 import { Activity, Check, X, MoreVertical, Link as LinkIcon, Unlink, Info } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import TrackingReferenceModal from './TrackingReferenceModal';
 import ExerciseInput from './ExerciseInput';
 import HydrationInput from './HydrationInput';
 import SleepInput from './SleepInput';
 import NutritionInput from './NutritionInput';
+
+// Sparkline component for scale/numeric variables
+function Sparkline({ 
+  data, 
+  color 
+}: { 
+  data: Array<{ date: Date; value: number | null; hasData: boolean }>; 
+  color: string;
+}) {
+  const width = 200;
+  const height = 48;
+  const padding = 4;
+  const innerWidth = width - padding * 2;
+  const innerHeight = height - padding * 2;
+  
+  // Calculate min/max for scaling
+  const values = data.filter(d => d.hasData).map(d => d.value!);
+  const min = values.length > 0 ? Math.min(...values) : 0;
+  const max = values.length > 0 ? Math.max(...values) : 10;
+  const range = max - min || 1; // Avoid division by zero
+  
+  // Generate path
+  const hasAnyData = values.length > 0;
+  let pathData = '';
+  
+  if (hasAnyData) {
+    const points = data.map((d, i) => {
+      const x = padding + (i / (data.length - 1 || 1)) * innerWidth;
+      let y;
+      if (d.hasData && d.value !== null) {
+        // Scale value to fit in innerHeight (inverted because SVG y=0 is at top)
+        const normalized = (d.value - min) / range;
+        y = padding + innerHeight - (normalized * innerHeight);
+      } else {
+        // For missing data, interpolate from previous/next values or use middle
+        let interpolatedValue = null;
+        
+        // Try to find previous value
+        for (let j = i - 1; j >= 0; j--) {
+          if (data[j].hasData && data[j].value !== null) {
+            interpolatedValue = data[j].value;
+            break;
+          }
+        }
+        
+        // If no previous, try next value
+        if (interpolatedValue === null) {
+          for (let j = i + 1; j < data.length; j++) {
+            if (data[j].hasData && data[j].value !== null) {
+              interpolatedValue = data[j].value;
+              break;
+            }
+          }
+        }
+        
+        if (interpolatedValue !== null) {
+          const normalized = (interpolatedValue - min) / range;
+          y = padding + innerHeight - (normalized * innerHeight);
+        } else {
+          y = padding + innerHeight / 2; // Middle if no data at all
+        }
+      }
+      return { x, y };
+    });
+    
+    // Create smooth line path
+    pathData = points.map((p, i) => {
+      if (i === 0) return `M ${p.x} ${p.y}`;
+      return `L ${p.x} ${p.y}`;
+    }).join(' ');
+  } else {
+    // Show faint horizontal line when no data
+    pathData = `M ${padding} ${height / 2} L ${width - padding} ${height / 2}`;
+  }
+  
+  return (
+    <svg width={width} height={height} className="w-full">
+      <path
+        d={pathData}
+        fill="none"
+        stroke={hasAnyData ? color : '#E5E7EB'}
+        strokeWidth={hasAnyData ? 2 : 1}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={hasAnyData ? 1 : 0.5}
+      />
+    </svg>
+  );
+}
+
+// Binary indicator component for binary variables
+function BinaryIndicator({ 
+  data, 
+  color 
+}: { 
+  data: Array<{ date: Date; value: number | null; hasData: boolean }>; 
+  color: string;
+}) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  return (
+    <div className="flex items-center justify-center gap-1.5">
+      {data.map((d, i) => {
+        const isToday = d.date.getTime() === today.getTime();
+        const isFuture = d.date.getTime() > today.getTime();
+        
+        // Determine circle state
+        let bgColor = '';
+        let borderColor = '';
+        let borderWidth = '0px';
+        
+        if (isFuture || !d.hasData) {
+          // Future or no data = grey
+          bgColor = '#E5E7EB'; // gray-200
+          borderColor = 'transparent';
+        } else if (d.value === 1 || d.value === true) {
+          // Has entry and value is true/1 = filled with accent color
+          bgColor = color;
+          borderColor = 'transparent';
+        } else {
+          // Has entry but value is false/0 = empty (just border)
+          bgColor = 'transparent';
+          borderColor = color;
+          borderWidth = '2px';
+        }
+        
+        return (
+          <div
+            key={i}
+            className={`w-6 h-6 rounded-full flex items-center justify-center ${
+              isToday ? 'ring-2' : ''
+            }`}
+            style={{
+              backgroundColor: bgColor,
+              borderColor: borderColor,
+              borderWidth: borderWidth,
+              borderStyle: borderWidth !== '0px' ? 'solid' : 'none',
+              boxShadow: isToday ? `0 0 0 2px ${color}40` : 'none',
+            }}
+            title={`${d.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: ${
+              isFuture ? 'Future' : !d.hasData ? 'No entry' : d.value === 1 || d.value === true ? 'Logged' : 'Not logged'
+            }`}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 interface VariableCardProps {
   variable: Variable & { _allVariableIds?: string[] }; // Extended to include all IDs for deduplicated variables
@@ -29,8 +177,8 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
   // Get all variable IDs to aggregate data from (for deduplicated variables)
   const allVariableIds = variable._allVariableIds || [variable.id];
   
-  // Aggregate data from all variables with the same name
-  const recentData = useMemo(() => {
+  // Helper function to load recent data from storage
+  const loadRecentData = () => {
     const allDataPoints: DataPoint[] = [];
     allVariableIds.forEach(id => {
       const points = getRecentDataPoints(id, 7);
@@ -46,11 +194,49 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
       }
     });
     return Array.from(unique.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [allVariableIds]);
+  };
+  
+  // State for recent data (allows optimistic updates)
+  const [recentData, setRecentData] = useState<DataPoint[]>(() => loadRecentData());
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // Sync with storage when variable IDs change or when refresh is triggered
+  useEffect(() => {
+    setRecentData(loadRecentData());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allVariableIds.join(','), refreshTrigger]);
   
   const chartData = recentData.map(dp => ({ value: dp.value }));
   const dataSources = getDataSources();
   const linkedSource = variable.dataSourceId ? dataSources.find(s => s.id === variable.dataSourceId) : null;
+  
+  // Get last 7 days of data (including missing days)
+  const last7DaysData = useMemo(() => {
+    const days: Array<{ date: Date; value: number | null; hasData: boolean }> = [];
+    const today = new Date();
+    
+    // Create array of last 7 days
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      
+      // Find data point for this date
+      const dataPoint = recentData.find(dp => {
+        const dpDate = new Date(dp.date);
+        dpDate.setHours(0, 0, 0, 0);
+        return dpDate.getTime() === date.getTime();
+      });
+      
+      days.push({
+        date,
+        value: dataPoint ? dataPoint.value : null,
+        hasData: !!dataPoint
+      });
+    }
+    
+    return days;
+  }, [recentData]);
   
   // Check variable type for special input components
   const varNameLower = variable.name.toLowerCase();
@@ -79,17 +265,72 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
         });
     });
     return total;
-  }, [allVariableIds, isHydration]);
+  }, [allVariableIds, isHydration, recentData]);
+  
+  // Format last log date
+  const formatLastLogDate = (date: Date): string => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const logDate = new Date(date);
+    logDate.setHours(0, 0, 0, 0);
+    
+    if (logDate.getTime() === today.getTime()) {
+      return 'Today';
+    } else if (logDate.getTime() === yesterday.getTime()) {
+      return 'Yesterday';
+    } else {
+      return logDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  };
+  
+  // Get most recent entry date
+  const lastLogDate = useMemo(() => {
+    if (recentData.length === 0) return null;
+    const sorted = [...recentData].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    return new Date(sorted[0].date);
+  }, [recentData]);
 
   const handleSave = (metadata?: any) => {
-    // Save data point to all variables with the same name
+    const now = new Date();
+    const nowISO = now.toISOString();
+    const todayKey = now.toDateString();
+    
+    // Create new data point
     const baseId = `dp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newDataPoint: DataPoint = {
+      id: baseId,
+      variableId: allVariableIds[0],
+      value: value,
+      date: nowISO,
+      note: note || undefined,
+      metadata: metadata || exerciseMetadata || undefined,
+    };
+    
+    // Optimistically update state
+    setRecentData(prev => {
+      // Remove any existing entry for today (keep most recent)
+      const filtered = prev.filter(dp => {
+        const dpDate = new Date(dp.date).toDateString();
+        return dpDate !== todayKey;
+      });
+      // Add new entry and sort
+      return [...filtered, newDataPoint].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+    });
+    
+    // Save to storage
     allVariableIds.forEach((varId, index) => {
       const dataPoint: DataPoint = {
         id: index === 0 ? baseId : `${baseId}-${index}`,
         variableId: varId,
         value: value,
-        date: new Date().toISOString(),
+        date: nowISO,
         note: note || undefined,
         metadata: metadata || exerciseMetadata || undefined,
       };
@@ -100,21 +341,49 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
     setValue(5);
     setNote('');
     setExerciseMetadata(null);
-    onUpdate?.();
+    // Trigger refresh after a brief delay to ensure storage is updated
+    setTimeout(() => {
+      setRefreshTrigger(prev => prev + 1);
+      onUpdate?.();
+    }, 50);
   };
   
   const handleExerciseLog = (val: number, metadata?: any) => {
     const exerciseNote = metadata?.note;
     const { note: _, ...exerciseMetadata } = metadata || {};
+    const now = new Date();
+    const nowISO = now.toISOString();
+    const todayKey = now.toDateString();
     
-    // Save to all variables with the same name
+    // Create new data point
     const baseId = `dp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newDataPoint: DataPoint = {
+      id: baseId,
+      variableId: allVariableIds[0],
+      value: val,
+      date: nowISO,
+      note: exerciseNote || undefined,
+      metadata: exerciseMetadata,
+    };
+    
+    // Optimistically update state
+    setRecentData(prev => {
+      const filtered = prev.filter(dp => {
+        const dpDate = new Date(dp.date).toDateString();
+        return dpDate !== todayKey;
+      });
+      return [...filtered, newDataPoint].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+    });
+    
+    // Save to storage
     allVariableIds.forEach((varId, index) => {
       const dataPoint: DataPoint = {
         id: index === 0 ? baseId : `${baseId}-${index}`,
         variableId: varId,
         value: val,
-        date: new Date().toISOString(),
+        date: nowISO,
         note: exerciseNote || undefined,
         metadata: exerciseMetadata,
       };
@@ -123,18 +392,45 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
     
     setShowInput(false);
     setExerciseMetadata(null);
-    onUpdate?.();
+    setTimeout(() => {
+      setRefreshTrigger(prev => prev + 1);
+      onUpdate?.();
+    }, 50);
   };
   
   const handleHydrationLog = (amount: number, unit: 'glass' | 'oz' | 'mug' | 'bottle') => {
-    // Save to all variables with the same name
+    const now = new Date();
+    const nowISO = now.toISOString();
+    const todayKey = now.toDateString();
+    
+    // Create new data point
     const baseId = `dp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newDataPoint: DataPoint = {
+      id: baseId,
+      variableId: allVariableIds[0],
+      value: 1, // Binary value for hydration
+      date: nowISO,
+      metadata: {
+        amount,
+        unit,
+      },
+    };
+    
+    // Optimistically update state
+    setRecentData(prev => {
+      // For hydration, we might have multiple entries per day, so we add it
+      return [...prev, newDataPoint].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+    });
+    
+    // Save to storage
     allVariableIds.forEach((varId, index) => {
       const dataPoint: DataPoint = {
         id: index === 0 ? baseId : `${baseId}-${index}`,
         variableId: varId,
         value: 1, // Binary value for hydration
-        date: new Date().toISOString(),
+        date: nowISO,
         metadata: {
           amount,
           unit,
@@ -143,18 +439,49 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
       saveDataPoint(dataPoint);
     });
     
-    onUpdate?.();
+    setTimeout(() => {
+      setRefreshTrigger(prev => prev + 1);
+      onUpdate?.();
+    }, 50);
   };
   
   const handleSleepLog = (quality: number, duration: number, note?: string) => {
-    // Save to all variables with the same name
+    const now = new Date();
+    const nowISO = now.toISOString();
+    const todayKey = now.toDateString();
+    
+    // Create new data point
     const baseId = `dp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newDataPoint: DataPoint = {
+      id: baseId,
+      variableId: allVariableIds[0],
+      value: quality, // Use quality as the main value
+      date: nowISO,
+      note: note || undefined,
+      metadata: {
+        sleepQuality: quality,
+        sleepDuration: duration,
+      },
+    };
+    
+    // Optimistically update state
+    setRecentData(prev => {
+      const filtered = prev.filter(dp => {
+        const dpDate = new Date(dp.date).toDateString();
+        return dpDate !== todayKey;
+      });
+      return [...filtered, newDataPoint].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+    });
+    
+    // Save to storage
     allVariableIds.forEach((varId, index) => {
       const dataPoint: DataPoint = {
         id: index === 0 ? baseId : `${baseId}-${index}`,
         variableId: varId,
         value: quality, // Use quality as the main value
-        date: new Date().toISOString(),
+        date: nowISO,
         note: note || undefined,
         metadata: {
           sleepQuality: quality,
@@ -167,21 +494,48 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
     setShowInput(false);
     setValue(5);
     setNote('');
-    onUpdate?.();
+    setTimeout(() => {
+      setRefreshTrigger(prev => prev + 1);
+      onUpdate?.();
+    }, 50);
   };
   
   const handleNutritionLog = (val: number, metadata?: any) => {
     const nutritionNote = metadata?.note;
     const { note: _, ...nutritionMetadata } = metadata || {};
+    const now = new Date();
+    const nowISO = now.toISOString();
+    const todayKey = now.toDateString();
     
-    // Save to all variables with the same name
+    // Create new data point
     const baseId = `dp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newDataPoint: DataPoint = {
+      id: baseId,
+      variableId: allVariableIds[0],
+      value: val,
+      date: nowISO,
+      note: nutritionNote || undefined,
+      metadata: nutritionMetadata,
+    };
+    
+    // Optimistically update state
+    setRecentData(prev => {
+      const filtered = prev.filter(dp => {
+        const dpDate = new Date(dp.date).toDateString();
+        return dpDate !== todayKey;
+      });
+      return [...filtered, newDataPoint].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+    });
+    
+    // Save to storage
     allVariableIds.forEach((varId, index) => {
       const dataPoint: DataPoint = {
         id: index === 0 ? baseId : `${baseId}-${index}`,
         variableId: varId,
         value: val,
-        date: new Date().toISOString(),
+        date: nowISO,
         note: nutritionNote || undefined,
         metadata: nutritionMetadata,
       };
@@ -191,25 +545,54 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
     setShowInput(false);
     setValue(5);
     setNote('');
-    onUpdate?.();
+    setTimeout(() => {
+      setRefreshTrigger(prev => prev + 1);
+      onUpdate?.();
+    }, 50);
   };
-
+  
   const handleQuickLog = (quickValue: number) => {
-    // Save to all variables with the same name
+    const now = new Date();
+    const nowISO = now.toISOString();
+    const todayKey = now.toDateString();
+    
+    // Create new data point
     const baseId = `dp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newDataPoint: DataPoint = {
+      id: baseId,
+      variableId: allVariableIds[0],
+      value: quickValue,
+      date: nowISO,
+    };
+    
+    // Optimistically update state
+    setRecentData(prev => {
+      const filtered = prev.filter(dp => {
+        const dpDate = new Date(dp.date).toDateString();
+        return dpDate !== todayKey;
+      });
+      return [...filtered, newDataPoint].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+    });
+    
+    // Save to storage
     allVariableIds.forEach((varId, index) => {
       const dataPoint: DataPoint = {
         id: index === 0 ? baseId : `${baseId}-${index}`,
         variableId: varId,
         value: quickValue,
-        date: new Date().toISOString(),
+        date: nowISO,
       };
       saveDataPoint(dataPoint);
     });
     
-    onUpdate?.();
+    setTimeout(() => {
+      setRefreshTrigger(prev => prev + 1);
+      onUpdate?.();
+    }, 50);
   };
-
+  
   const handleLinkSource = (sourceId: string) => {
     const updated = { ...variable, dataSourceId: sourceId };
     saveVariable(updated);
@@ -284,21 +667,16 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
         </div>
       </div>
 
-      {chartData.length > 0 && !isHydration && !isNutrition && !isStress && (
-        <div className="h-16 mb-3">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke={variable.color}
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {/* Visualization area - consistent height for all cards */}
+      <div className="h-16 mb-3 flex items-center justify-center">
+        {variable.type === 'scale' || variable.type === 'numeric' ? (
+          // Sparkline for scale/numeric variables
+          <Sparkline data={last7DaysData} color={variable.color} />
+        ) : variable.type === 'binary' ? (
+          // Binary indicator for binary variables
+          <BinaryIndicator data={last7DaysData} color={variable.color} />
+        ) : null}
+      </div>
 
       {!showInput ? (
         <div className="space-y-2 mt-2">
@@ -352,7 +730,9 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
               value={value}
               onChange={handleNutritionLog}
               onCancel={() => {
-                // Nutrition doesn't need cancel like exercise - it's always visible
+                setShowInput(false);
+                setValue(5);
+                setNote('');
               }}
             />
           )}
@@ -634,18 +1014,34 @@ export default function VariableCard({ variable, onUpdate }: VariableCardProps) 
 
       <div className="mt-2 pt-2 pb-0 border-t border-gray-100 dark:border-gray-700">
         {isHydration && todayHydrationTotal > 0 ? (
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500">
+                {recentData.length} entries in last 7 days
+              </p>
+              <p className="text-xs font-semibold text-[var(--accent)]">
+                Today: {todayHydrationTotal} oz
+              </p>
+            </div>
+            {lastLogDate && (
+              <p className="text-xs text-gray-400">
+                Last log: {formatLastLogDate(lastLogDate)}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
             <p className="text-xs text-gray-500">
               {recentData.length} entries in last 7 days
             </p>
-            <p className="text-xs font-semibold text-[var(--accent)]">
-              Today: {todayHydrationTotal} oz
-            </p>
+            {lastLogDate ? (
+              <p className="text-xs text-gray-400">
+                Last log: {formatLastLogDate(lastLogDate)}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400">No logs yet</p>
+            )}
           </div>
-        ) : (
-          <p className="text-xs text-gray-500">
-            {recentData.length} entries in last 7 days
-          </p>
         )}
       </div>
 

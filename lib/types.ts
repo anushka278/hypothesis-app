@@ -32,6 +32,7 @@ export interface Hypothesis {
   variables: Variable[];
   createdAt: string;
   archived: boolean;
+  status?: 'active' | 'concluded'; // Experiment status
   parsed?: ParsedHypothesis;
   knowledgeCard?: KnowledgeCard;
   baselinePhase?: {
@@ -46,6 +47,11 @@ export interface Hypothesis {
     specificContext?: string;
   };
   conversationId?: string; // Link to the conversation that created this hypothesis
+  conclusion?: {
+    verdict: 'supported' | 'rejected' | 'inconclusive';
+    summary: string;
+    concludedAt: string;
+  };
 }
 
 export interface DataPoint {

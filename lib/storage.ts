@@ -34,13 +34,36 @@ export function getHypotheses(): Hypothesis[] {
 }
 
 export function getActiveHypotheses(): Hypothesis[] {
-  return getHypotheses().filter(h => !h.archived);
+  return getHypotheses().filter(h => !h.archived && h.status !== 'concluded');
 }
 
 export function archiveHypothesis(id: string): void {
   const hypotheses = getHypotheses();
   const hypothesis = hypotheses.find(h => h.id === id);
   if (hypothesis) {
+    hypothesis.archived = true;
+    if (!hypothesis.status) {
+      hypothesis.status = 'concluded';
+    }
+    localStorage.setItem(STORAGE_KEYS.HYPOTHESES, JSON.stringify(hypotheses));
+  }
+}
+
+export function updateHypothesisConclusion(id: string, conclusion: Hypothesis['conclusion']): void {
+  const hypotheses = getHypotheses();
+  const hypothesis = hypotheses.find(h => h.id === id);
+  if (hypothesis) {
+    hypothesis.conclusion = conclusion;
+    hypothesis.status = 'concluded';
+    localStorage.setItem(STORAGE_KEYS.HYPOTHESES, JSON.stringify(hypotheses));
+  }
+}
+
+export function concludeAndArchiveHypothesis(id: string): void {
+  const hypotheses = getHypotheses();
+  const hypothesis = hypotheses.find(h => h.id === id);
+  if (hypothesis) {
+    hypothesis.status = 'concluded';
     hypothesis.archived = true;
     localStorage.setItem(STORAGE_KEYS.HYPOTHESES, JSON.stringify(hypotheses));
   }

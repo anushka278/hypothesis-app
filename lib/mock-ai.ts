@@ -1,4 +1,4 @@
-import { Insight, DataPoint, Variable } from './types';
+import { Insight, DataPoint, Variable, Hypothesis } from './types';
 import { getDataPoints, getVariables } from './storage';
 
 export function generateInsights(variableIds?: string[]): Insight[] {
@@ -138,5 +138,102 @@ export function generateFollowUpQuestion(userInput: string): string {
   }
   
   return "Interesting! To help you track this, what would you like to measure? Think about both the behavior you want to track and the outcome you want to observe.";
+}
+
+export function generateConclusion(hypothesis: Hypothesis): { verdict: 'supported' | 'rejected' | 'inconclusive'; summary: string } {
+  const { getDataPoints } = require('./storage');
+  
+  // Find primary variables (intervention and outcome)
+  const interventionVar = hypothesis.variables.find(v => 
+    !v.isControl && 
+    hypothesis.parsed?.intervention?.toLowerCase().includes(v.name.toLowerCase())
+  );
+  const outcomeVar = hypothesis.variables.find(v => 
+    !v.isControl && 
+    hypothesis.parsed?.outcome?.toLowerCase().includes(v.name.toLowerCase())
+  );
+  
+  // If we can't match variables, use first two primary variables
+  const primaryVars = hypothesis.variables.filter(v => !v.isControl);
+  const var1 = interventionVar || primaryVars[0];
+  const var2 = outcomeVar || primaryVars[1];
+  
+  if (!var1 || !var2) {
+    return {
+      verdict: 'inconclusive',
+      summary: 'Unable to generate conclusion: insufficient variable data for analysis.',
+    };
+  }
+  
+  const points1 = getDataPoints(var1.id);
+  const points2 = getDataPoints(var2.id);
+  
+  if (points1.length < 5 || points2.length < 5) {
+    return {
+      verdict: 'inconclusive',
+      summary: 'More data collection is needed to draw meaningful conclusions. Please continue tracking for a few more days.',
+    };
+  }
+  
+  // Find overlapping dates
+  const dates1 = new Set(points1.map(p => p.date));
+  const overlappingPoints = points2.filter(p => dates1.has(p.date));
+  
+  if (overlappingPoints.length < 5) {
+    return {
+      verdict: 'inconclusive',
+      summary: 'Not enough overlapping data points to analyze the relationship. Try to log both variables on the same days.',
+    };
+  }
+  
+  // Match points by date
+  const matchedPoints: { var1: number; var2: number; date: string }[] = [];
+  points1.forEach(p1 => {
+    const p2 = overlappingPoints.find(p => p.date === p1.date);
+    if (p2) {
+      matchedPoints.push({ var1: p1.value, var2: p2.value, date: p1.date });
+    }
+  });
+  
+  // Calculate correlation
+  const avg1 = matchedPoints.reduce((sum, p) => sum + p.var1, 0) / matchedPoints.length;
+  const avg2 = matchedPoints.reduce((sum, p) => sum + p.var2, 0) / matchedPoints.length;
+  
+  let covariance = 0;
+  let variance1 = 0;
+  let variance2 = 0;
+  
+  matchedPoints.forEach(p => {
+    const diff1 = p.var1 - avg1;
+    const diff2 = p.var2 - avg2;
+    covariance += diff1 * diff2;
+    variance1 += diff1 * diff1;
+    variance2 += diff2 * diff2;
+  });
+  
+  const correlation = variance1 === 0 || variance2 === 0 
+    ? 0 
+    : covariance / Math.sqrt(variance1 * variance2);
+  
+  // Determine verdict based on correlation
+  let verdict: 'supported' | 'rejected' | 'inconclusive';
+  let summary: string;
+  
+  const interventionName = hypothesis.parsed?.intervention || var1.name;
+  const outcomeName = hypothesis.parsed?.outcome || var2.name;
+  
+  if (correlation > 0.4) {
+    verdict = 'supported';
+    const percentChange = Math.round(Math.abs(correlation) * 100);
+    summary = `Your hypothesis appears to be supported! On days you ${interventionName.toLowerCase()}, your ${outcomeName.toLowerCase()} was approximately ${percentChange}% higher. This suggests a positive correlation between ${interventionName} and ${outcomeName}. Consider continuing this intervention if it aligns with your goals.`;
+  } else if (correlation < -0.2) {
+    verdict = 'rejected';
+    summary = `Based on your data, there appears to be a negative relationship between ${interventionName} and ${outcomeName}. On days you engaged in ${interventionName.toLowerCase()}, your ${outcomeName.toLowerCase()} tended to be lower. You may want to reconsider this intervention or investigate other factors that might be affecting your ${outcomeName.toLowerCase()}.`;
+  } else {
+    verdict = 'inconclusive';
+    summary = `The data does not show a clear relationship between ${interventionName} and ${outcomeName}. This could mean:\n\n• The intervention may not have a significant effect\n• Other factors may be influencing your ${outcomeName.toLowerCase()}\n• More data or a longer tracking period might be needed\n\nConsider continuing to track both variables or exploring other interventions.`;
+  }
+  
+  return { verdict, summary };
 }
 
